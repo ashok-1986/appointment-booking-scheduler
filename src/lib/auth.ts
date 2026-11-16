@@ -19,8 +19,15 @@ export const auth = betterAuth({
     requireEmailVerification: false,
   },
   baseURL: {
-    allowedHosts: ["localhost:*"],
-    fallback: process.env.BETTER_AUTH_URL,
+    allowedHosts: [
+      "localhost:*",
+      "127.0.0.1:*",
+      "*.netlify.app",
+      "*.netlify.com",
+      "*.meetprerna.com",
+      "meetprerna.com",
+    ],
+    fallback: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:4000",
   },
   advanced: {
     defaultCookieAttributes: {
@@ -32,7 +39,20 @@ export const auth = betterAuth({
   trustedOrigins: [
     "http://localhost:4000",
     "http://localhost:3000",
-  ],
+    "http://127.0.0.1:4000",
+    "http://127.0.0.1:3000",
+    "https://*.netlify.app",
+    "*.netlify.app",
+    "https://*.netlify.com",
+    "*.netlify.com",
+    "https://*.meetprerna.com",
+    "https://meetprerna.com",
+    process.env.BETTER_AUTH_URL || "",
+    process.env.NEXT_PUBLIC_APP_URL || "",
+    process.env.URL || "",
+    process.env.DEPLOY_PRIME_URL || "",
+    process.env.DEPLOY_URL || "",
+  ].filter(Boolean),
   secret: process.env.BETTER_AUTH_SECRET!,
 });
 
