@@ -853,10 +853,15 @@ export default function BookingDetailPage() {
               )}
 
               {/* Fast Direct WhatsApp Composer */}
-              <div className="pt-3 border-t space-y-2">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block">
-                  Quick WhatsApp Dispatch
-                </label>
+              <div className="pt-3 border-t space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                    Quick WhatsApp Dispatch
+                  </label>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    To: {booking.client.phone}
+                  </span>
+                </div>
                 <Textarea
                   placeholder={`Write a direct WhatsApp message to ${booking.client.name}…`}
                   value={waMessage}
@@ -864,28 +869,80 @@ export default function BookingDetailPage() {
                   rows={2}
                   className="text-xs font-body"
                 />
-                <Button
-                  onClick={() =>
-                    callAction("wa", async () => {
-                      const res = await fetch(`/api/bookings/${id}/whatsapp`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ message: waMessage }),
-                      });
-                      if (res.ok) setWaMessage("");
-                      return res.json();
-                    })
-                  }
-                  disabled={actionPending === "wa" || !waMessage.trim()}
-                  className="w-full bg-[#1A1A1A] hover:bg-black text-[#C4FF61] dark:bg-[#C4FF61] dark:text-[#1A1A1A] text-xs h-9 font-medium"
-                >
-                  {actionPending === "wa" ? (
-                    <Loader2 className="mr-2 size-3.5 animate-spin" />
-                  ) : (
-                    <MessageSquare className="mr-2 size-3.5" />
+
+                <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                  {cleanPhone && (
+                    <a
+                      href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+                        waMessage.trim() || `Hi ${booking.client.name}, this is Prerna from Meet Prerna Tattoo Studio.`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#25D366] hover:bg-[#20bd5a] px-3 text-xs font-semibold text-white shadow-xs transition-colors"
+                      title="Open WhatsApp Web or mobile app with pre-filled text"
+                    >
+                      <MessageCircle className="size-4" />
+                      <span>Open in WhatsApp Web / App</span>
+                    </a>
                   )}
-                  Send via WhatsApp Cloud API
-                </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      callAction("wa-log", async () => {
+                        const res = await fetch(`/api/bookings/${id}/whatsapp`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ message: waMessage, logOnly: true }),
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                          setWaMessage("");
+                          toast.success("Logged message to client timeline");
+                        }
+                        return data;
+                      })
+                    }
+                    disabled={actionPending === "wa-log" || !waMessage.trim()}
+                    className="text-xs h-9 font-medium"
+                    title="Record this message into the client's timeline history"
+                  >
+                    {actionPending === "wa-log" ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : (
+                      <FileText className="mr-1.5 size-3.5" />
+                    )}
+                    Log to Timeline
+                  </Button>
+
+                  <Button
+                    onClick={() =>
+                      callAction("wa", async () => {
+                        const res = await fetch(`/api/bookings/${id}/whatsapp`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ message: waMessage }),
+                        });
+                        const data = await res.json();
+                        if (res.ok) setWaMessage("");
+                        return data;
+                      })
+                    }
+                    disabled={actionPending === "wa" || !waMessage.trim()}
+                    className="bg-[#1A1A1A] hover:bg-black text-[#C4FF61] dark:bg-[#C4FF61] dark:text-[#1A1A1A] text-xs h-9 font-medium"
+                    title="Send automatically using Meta WhatsApp Cloud API"
+                  >
+                    {actionPending === "wa" ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : (
+                      <Send className="mr-1.5 size-3.5" />
+                    )}
+                    Send via Cloud API
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  💡 Tip: Click <strong>Open in WhatsApp Web / App</strong> to send directly from your personal or studio phone without Meta API template restrictions.
+                </p>
               </div>
             </CardContent>
           </Card>

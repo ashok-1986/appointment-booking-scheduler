@@ -30,11 +30,17 @@ export async function POST(
       return NextResponse.json({ ok: false, error: "Message is required" }, { status: 400 });
     }
 
-    try {
-      await sendWhatsAppText(booking.client.phone, content);
-    } catch (err) {
-      console.error("WhatsApp send failed", err);
-      return NextResponse.json({ ok: false, error: "WhatsApp send failed" }, { status: 500 });
+    const logOnly = Boolean(body.logOnly);
+    if (!logOnly) {
+      try {
+        await sendWhatsAppText(booking.client.phone, content);
+      } catch (err: any) {
+        console.error("WhatsApp Cloud API send failed:", err);
+        return NextResponse.json({
+          ok: false,
+          error: err?.message || "WhatsApp Cloud API failed. Use the 'Open in WhatsApp' button instead.",
+        }, { status: 500 });
+      }
     }
 
     await db.insert(messages).values({

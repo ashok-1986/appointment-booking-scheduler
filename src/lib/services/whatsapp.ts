@@ -43,10 +43,11 @@ export async function sendWhatsAppMessage(
   message: Omit<WhatsAppMessage, "messaging_product" | "recipient_type" | "to">
 ): Promise<WhatsAppResponse> {
   const { token, phoneNumberId } = getConfig();
+  const cleanTo = to.replace(/[^0-9]/g, "");
   const payload: WhatsAppMessage = {
     messaging_product: "whatsapp",
     recipient_type: "individual",
-    to,
+    to: cleanTo,
     ...message,
   };
   const res = await fetch(`${GRAPH_URL}/${phoneNumberId}/messages`, {
