@@ -4,7 +4,7 @@ import { listBookings } from "@/lib/workflows";
 import { jsonError } from "@/lib/route-utils";
 
 export async function GET(req: NextRequest) {
-  const user = await getSessionUser();
+  const user = await getSessionUser(req.headers);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

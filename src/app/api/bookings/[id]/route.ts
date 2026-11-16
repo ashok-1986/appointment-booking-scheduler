@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const user = await getSessionUser();
+  const user = await getSessionUser(req.headers);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const booking = await getBooking(id);
   if (!booking) return NextResponse.json({ error: "Not found" }, { status: 404 });
