@@ -20,6 +20,13 @@
 - **If the dev server stops unexpectedly**: Stop all live checks and ask the user to restart it. Do not attempt to restart it yourself.
 
 
+## Process Limits & Hosting Architecture
+- **Max Processes**: The hosting environment limit is Max Processes (process ceiling), not disk, memory, CPU, or inodes.
+- **Production Mode**: Always run the application in production mode on the server; never leave development watchers (`npm run dev` / `bun run dev`) running in background on shared hosting.
+- **Single Process**: Avoid starting duplicate Node.js / Bun instances or process managers inside the hosting account.
+- **Sibling Sites**: Account-wide process ceiling is shared across websites on this hosting plan. Audit background workers, plugins, and PHP requests on sibling sites.
+- **Migration Path**: If process capacity limits persist, migrate the Next.js workload to a Hostinger VPS or upgrade hosting tier.
+
 ## Package Management
 - **Package Manager**: Use `bun` for all package management operations
 - **Installation**: `bun install`
