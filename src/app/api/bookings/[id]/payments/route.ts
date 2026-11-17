@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth-utils";
 import { listPayments } from "@/lib/workflows";
-import { jsonError } from "@/lib/route-utils";
+import { jsonOk, jsonError } from "@/lib/route-utils";
 
 export async function GET(
   req: NextRequest,
@@ -12,7 +12,7 @@ export async function GET(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const payments = await listPayments(id);
-    return NextResponse.json(payments);
+    return jsonOk(payments);
   } catch (err) {
     return jsonError(err);
   }

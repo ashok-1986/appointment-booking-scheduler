@@ -51,6 +51,7 @@ export const auth = betterAuth({
     fallback: resolvedBaseUrl,
   },
   advanced: {
+    trustedProxyHeaders: true,
     defaultCookieAttributes: {
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
