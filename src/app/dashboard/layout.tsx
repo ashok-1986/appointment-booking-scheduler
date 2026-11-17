@@ -31,17 +31,35 @@ export default async function DashboardLayout({
               </span>
             </Link>
 
-            <nav className="flex items-center gap-4 text-sm font-medium">
+            <nav className="flex items-center gap-1 sm:gap-4 text-sm font-medium">
               <Link
                 href="/dashboard/bookings"
-                className="text-foreground transition-colors hover:text-foreground/80 font-semibold"
+                className="text-foreground transition-colors hover:text-foreground/80 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800"
               >
                 Bookings
               </Link>
               <Link
+                href="/dashboard/customers"
+                className="text-muted-foreground transition-colors hover:text-foreground px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                Customers
+              </Link>
+              <Link
+                href="/dashboard/calendar"
+                className="text-muted-foreground transition-colors hover:text-foreground px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                Calendar
+              </Link>
+              <Link
+                href="/dashboard/gallery"
+                className="text-muted-foreground transition-colors hover:text-foreground px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                Gallery
+              </Link>
+              <Link
                 href="/enquiry"
                 target="_blank"
-                className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground text-xs"
+                className="hidden md:inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground text-xs ml-2 px-2.5 py-1 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white/50"
               >
                 <span>Live Enquiry Form</span>
                 <ExternalLink className="h-3 w-3" />

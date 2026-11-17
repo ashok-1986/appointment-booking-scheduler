@@ -11,24 +11,47 @@ import {
   uuid,
   jsonb,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { createInsertSchema, createUpdateSchema } from "drizzle-zod";
 import { z } from "zod";
 import { user, session, account, verification } from "./auth-schema";
 
 export const bookingStageEnum = pgEnum("booking_stage", [
   "enquiry",
+  "new_enquiry",
   "in_consultation",
+  "consultation_review",
   "qualified",
   "not_a_fit",
   "deposit_requested",
   "deposit_pending",
   "deposit_paid",
   "scheduled",
+  "confirmed_scheduled",
   "session_complete",
+  "session_completed",
   "paid_in_full",
+  "payment_pending",
   "follow_up_sent",
   "follow_up_completed",
+  "closed_followup",
+]);
+
+export const sessionStatusEnum = pgEnum("session_status", [
+  "scheduled",
+  "in_progress",
+  "completed",
+  "cancelled",
+  "rescheduled",
+]);
+
+export const mediaCategoryEnum = pgEnum("media_category", [
+  "reference",
+  "design",
+  "before",
+  "fresh",
+  "healed",
+  "touch_up",
 ]);
 
 export const paymentTypeEnum = pgEnum("payment_type", ["deposit", "balance"]);
@@ -58,6 +81,12 @@ export const clients = pgTable(
     name: text("name").notNull(),
     email: text("email").notNull(),
     phone: text("phone").notNull(),
+    instagramHandle: text("instagram_handle"),
+    dateOfBirth: text("date_of_birth"),
+    city: text("city"),
+    notes: text("notes"),
+    totalSpend: bigint("total_spend", { mode: "bigint" }).default(sql`0`),
+    bookingsCount: integer("bookings_count").default(0),
     hubspotContactId: text("hubspot_contact_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
@@ -85,6 +114,10 @@ export const bookings = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     serviceType: text("service_type").notNull(),
     designDescription: text("design_description"),
+    placement: text("placement"),
+    approximateSize: text("approximate_size"),
+    style: text("style"),
+    quotedAmount: bigint("quoted_amount", { mode: "bigint" }),
     referenceImages: jsonb("reference_images").$type<string[]>().default([]),
     preferredDateRangeStart: timestamp("preferred_date_range_start", {
       withTimezone: true,
@@ -301,8 +334,118 @@ export const userRoles = pgTable(
   (table) => [index("user_roles_user_id_idx").on(table.userId)]
 );
 
+export const bookingSessions = pgTable(
+  "booking_sessions",
+  {
+    id: text("id").primaryKey(),
+    bookingId: text("booking_id")
+      .notNull()
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    sessionNumber: integer("session_number").default(1).notNull(),
+    scheduledStart: timestamp("scheduled_start", { withTimezone: true }).notNull(),
+    scheduledEnd: timestamp("scheduled_end", { withTimezone: true }).notNull(),
+    durationMinutes: integer("duration_minutes").default(180).notNull(),
+    status: sessionStatusEnum("status").default("scheduled").notNull(),
+    notes: text("notes"),
+    consentStatus: text("consent_status").default("not_started").notNull(),
+    overrideReason: text("override_reason"),
+    overrideByUserId: text("override_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("booking_sessions_booking_id_idx").on(table.bookingId),
+    index("booking_sessions_scheduled_start_idx").on(table.scheduledStart),
+    index("booking_sessions_status_idx").on(table.status),
+  ]
+);
+
+export const mediaAssets = pgTable(
+  "media_assets",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    bookingId: text("booking_id").references(() => bookings.id, {
+      onDelete: "cascade",
+    }),
+    sessionId: text("session_id").references(() => bookingSessions.id, {
+      onDelete: "set null",
+    }),
+    url: text("url").notNull(),
+    category: mediaCategoryEnum("category").notNull(),
+    caption: text("caption"),
+    consentForMarketing: boolean("consent_for_marketing").default(false).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("media_assets_client_id_idx").on(table.clientId),
+    index("media_assets_booking_id_idx").on(table.bookingId),
+    index("media_assets_session_id_idx").on(table.sessionId),
+    index("media_assets_category_idx").on(table.category),
+  ]
+);
+
+export const consentRecords = pgTable(
+  "consent_records",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id").references(() => bookingSessions.id, {
+      onDelete: "cascade",
+    }),
+    bookingId: text("booking_id")
+      .notNull()
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    legalName: text("legal_name").notNull(),
+    dateOfBirth: text("date_of_birth").notNull(),
+    ageVerified: boolean("age_verified").notNull(),
+    healthDisclosures: jsonb("health_disclosures").$type<{
+      allergies?: boolean;
+      allergiesDetails?: string;
+      bloodThinners?: boolean;
+      skinConditions?: boolean;
+      skinConditionsDetails?: string;
+      pregnantOrNursing?: boolean;
+      cardiacOrEpileptic?: boolean;
+    }>().notNull(),
+    procedureConsent: boolean("procedure_consent").notNull(),
+    photographyConsent: boolean("photography_consent").notNull(),
+    marketingConsent: boolean("marketing_consent").notNull(),
+    signatureImageUrl: text("signature_image_url").notNull(),
+    pdfUrl: text("pdf_url"),
+    signerIp: text("signer_ip"),
+    signerUserAgent: text("signer_user_agent"),
+    signedAt: timestamp("signed_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("consent_records_session_id_idx").on(table.sessionId),
+    index("consent_records_booking_id_idx").on(table.bookingId),
+    index("consent_records_client_id_idx").on(table.clientId),
+  ]
+);
+
 export const insertClientSchema = createInsertSchema(clients);
 export const insertBookingSchema = createInsertSchema(bookings);
+export const insertBookingSessionSchema = createInsertSchema(bookingSessions);
+export const insertMediaAssetSchema = createInsertSchema(mediaAssets);
+export const insertConsentRecordSchema = createInsertSchema(consentRecords);
 export const insertPaymentSchema = createInsertSchema(payments);
 export const insertConsentFormSchema = createInsertSchema(consentForms);
 export const insertMessageSchema = createInsertSchema(messages);
@@ -316,6 +459,9 @@ export const insertUserRoleSchema = createInsertSchema(userRoles);
 export type User = typeof users.$inferSelect;
 export type Client = typeof clients.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
+export type BookingSession = typeof bookingSessions.$inferSelect;
+export type MediaAsset = typeof mediaAssets.$inferSelect;
+export type ConsentRecord = typeof consentRecords.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type ConsentForm = typeof consentForms.$inferSelect;
 export type Message = typeof messages.$inferSelect;
@@ -326,6 +472,9 @@ export type UserRole = typeof userRoles.$inferSelect;
 
 export type NewClient = typeof clients.$inferInsert;
 export type NewBooking = typeof bookings.$inferInsert;
+export type NewBookingSession = typeof bookingSessions.$inferInsert;
+export type NewMediaAsset = typeof mediaAssets.$inferInsert;
+export type NewConsentRecord = typeof consentRecords.$inferInsert;
 export type NewPayment = typeof payments.$inferInsert;
 export type NewConsentForm = typeof consentForms.$inferInsert;
 export type NewMessage = typeof messages.$inferInsert;
@@ -336,11 +485,62 @@ export type NewUserRole = typeof userRoles.$inferInsert;
 
 export const clientsRelations = relations(clients, ({ many }) => ({
   bookings: many(bookings),
+  mediaAssets: many(mediaAssets),
+  consentRecords: many(consentRecords),
 }));
 
-export const bookingsRelations = relations(bookings, ({ one }) => ({
+export const bookingsRelations = relations(bookings, ({ one, many }) => ({
   client: one(clients, {
     fields: [bookings.clientId],
+    references: [clients.id],
+  }),
+  sessions: many(bookingSessions),
+  payments: many(payments),
+  mediaAssets: many(mediaAssets),
+  consentRecords: many(consentRecords),
+}));
+
+export const bookingSessionsRelations = relations(
+  bookingSessions,
+  ({ one, many }) => ({
+    booking: one(bookings, {
+      fields: [bookingSessions.bookingId],
+      references: [bookings.id],
+    }),
+    consentRecord: one(consentRecords, {
+      fields: [bookingSessions.id],
+      references: [consentRecords.sessionId],
+    }),
+    mediaAssets: many(mediaAssets),
+  })
+);
+
+export const mediaAssetsRelations = relations(mediaAssets, ({ one }) => ({
+  client: one(clients, {
+    fields: [mediaAssets.clientId],
+    references: [clients.id],
+  }),
+  booking: one(bookings, {
+    fields: [mediaAssets.bookingId],
+    references: [bookings.id],
+  }),
+  session: one(bookingSessions, {
+    fields: [mediaAssets.sessionId],
+    references: [bookingSessions.id],
+  }),
+}));
+
+export const consentRecordsRelations = relations(consentRecords, ({ one }) => ({
+  session: one(bookingSessions, {
+    fields: [consentRecords.sessionId],
+    references: [bookingSessions.id],
+  }),
+  booking: one(bookings, {
+    fields: [consentRecords.bookingId],
+    references: [bookings.id],
+  }),
+  client: one(clients, {
+    fields: [consentRecords.clientId],
     references: [clients.id],
   }),
 }));

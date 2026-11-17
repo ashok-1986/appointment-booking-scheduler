@@ -721,9 +721,10 @@ export default function BookingsClient({
 
                         {/* Client metadata chips */}
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground font-body">
-                          <span className="flex items-center gap-1">
+                          <span className="flex items-center gap-1.5 font-medium text-zinc-700 dark:text-zinc-300" title={`UTC: ${new Date(b.createdAt).toISOString()}`}>
                             <Clock className="size-3 text-muted-foreground/70" />
-                            {formatDistanceToNow(new Date(b.createdAt), { addSuffix: true })}
+                            <span>{new Date(b.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })} IST</span>
+                            <span className="text-zinc-400 font-normal">({formatDistanceToNow(new Date(b.createdAt), { addSuffix: true })})</span>
                           </span>
 
                           {intake.city && (

@@ -271,8 +271,10 @@ export default function BookingDetailPage() {
                 Dossier · {booking.serviceType}
               </span>
               <span className="text-muted-foreground">·</span>
-              <span className="text-xs text-muted-foreground">
-                Enquired {format(new Date(booking.createdAt), "MMM d, yyyy")}
+              <span className="inline-flex items-center gap-1.5 text-xs text-zinc-700 dark:text-zinc-300 font-medium" title={`UTC: ${new Date(booking.createdAt).toISOString()}`}>
+                <Clock className="size-3.5 text-zinc-400" />
+                <span>Submitted {format(new Date(booking.createdAt), "d MMM yyyy, h:mm a")} IST</span>
+                <span className="text-zinc-400 font-normal">({formatDistanceToNow(new Date(booking.createdAt), { addSuffix: true })})</span>
               </span>
             </div>
             <h1 className="font-heading font-cormorant text-3xl sm:text-4xl font-semibold tracking-tight text-foreground">
@@ -283,6 +285,13 @@ export default function BookingDetailPage() {
 
         {/* Quick Contact & Stage Pill */}
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <Link
+            href={`/dashboard/customers/${booking.client.id}`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white dark:bg-zinc-800 px-3 text-xs font-medium text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors shadow-xs"
+          >
+            <User className="size-3.5 text-zinc-500" />
+            <span>Customer Profile</span>
+          </Link>
           {waUrl && (
             <a
               href={waUrl}
