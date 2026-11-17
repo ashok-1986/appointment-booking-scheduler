@@ -50,15 +50,43 @@ export function UpcomingSessionsCard({
             const isCompleted = s.status === "completed";
             const isConsentSigned = s.consentStatus === "signed";
 
+            let meetingLabel = `Tattoo Session #${s.sessionNumber || idx + 1}`;
+            let cleanNotes = s.notes || "";
+            let meetingBadge = "Tattoo";
+
+            if (s.notes?.includes("[Consultation]")) {
+              meetingLabel = "Design Consultation";
+              meetingBadge = "Consultation";
+              cleanNotes = s.notes.replace(/\[Consultation\]/g, "").trim();
+            } else if (s.notes?.includes("[Touch-up]")) {
+              meetingLabel = "Touch-up Session";
+              meetingBadge = "Touch-up";
+              cleanNotes = s.notes.replace(/\[Touch-up\]/g, "").trim();
+            } else if (s.notes?.includes("[Healed Review]")) {
+              meetingLabel = "Healed Photo Review";
+              meetingBadge = "Review";
+              cleanNotes = s.notes.replace(/\[Healed Review\]/g, "").trim();
+            } else if (s.notes?.includes("[Tattoo Session")) {
+              const match = s.notes.match(/\[Tattoo Session #?(\d*)\]/);
+              meetingLabel = `Tattoo Session #${match?.[1] || s.sessionNumber || idx + 1}`;
+              meetingBadge = "Tattoo";
+              cleanNotes = s.notes.replace(/\[Tattoo Session.*?\]/g, "").trim();
+            }
+
             return (
               <div
                 key={s.id || idx}
                 className="rounded-lg border border-border/50 bg-background/50 p-2.5 text-xs space-y-1.5"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-foreground">
-                    Session #{s.sessionNumber || idx + 1}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-foreground">
+                      {meetingLabel}
+                    </span>
+                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-border/70 text-muted-foreground font-normal">
+                      {meetingBadge}
+                    </Badge>
+                  </div>
                   <Badge
                     variant="outline"
                     className={`text-[10px] h-4.5 font-medium ${
@@ -76,6 +104,12 @@ export function UpcomingSessionsCard({
                     <Clock className="size-3 text-muted-foreground" />
                     <span>{format(start, "EEE, dd MMM yyyy • h:mm a")}</span>
                   </div>
+                )}
+
+                {cleanNotes && (
+                  <p className="text-[11px] text-muted-foreground/90 bg-muted/30 rounded px-2 py-1 italic">
+                    {cleanNotes}
+                  </p>
                 )}
 
                 <div className="flex items-center justify-between border-t border-border/30 pt-1.5 text-[11px]">

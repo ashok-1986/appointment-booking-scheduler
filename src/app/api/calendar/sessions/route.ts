@@ -133,11 +133,14 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const {
+      bookingId: incomingBookingId,
       clientId,
       newClient,
       scheduledStart,
       durationMinutes = 180,
       serviceType = "Tattoo",
+      meetingType,
+      sessionType,
       designDescription,
       placement,
       approximateSize,
@@ -220,12 +223,57 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. RESOLVE CLIENT
+    // 2. RESOLVE CLIENT & BOOKING PROJECT
     let resolvedClientId = clientId;
     let resolvedClientName = "";
     let resolvedClientPhone = "";
+    let targetBookingId = incomingBookingId || null;
+    let sessionNumber = 1;
 
-    if (newClient) {
+    // Case A: Existing booking ID explicitly provided
+    if (targetBookingId) {
+      const existingBooking = await db.query.bookings.findFirst({
+        where: eq(bookings.id, targetBookingId),
+        with: { client: true },
+      });
+
+      if (!existingBooking) {
+        return NextResponse.json(
+          { ok: false, error: "Referenced tattoo booking project not found" },
+          { status: 404 }
+        );
+      }
+
+      resolvedClientId = existingBooking.clientId;
+      resolvedClientName = existingBooking.client.name;
+      resolvedClientPhone = existingBooking.client.phone;
+
+      // Count existing sessions for this booking to determine session number
+      const existingSessionsCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(bookingSessions)
+        .where(eq(bookingSessions.bookingId, existingBooking.id));
+
+      sessionNumber = Number(existingSessionsCount[0]?.count || 0) + 1;
+
+      // Update booking sessionDate and stage
+      await db
+        .update(bookings)
+        .set({
+          sessionDate: start,
+          sessionDuration: duration,
+          stage:
+            existingBooking.stage === "deposit_paid" ||
+            existingBooking.stage === "qualified" ||
+            existingBooking.stage === "deposit_pending"
+              ? "scheduled"
+              : existingBooking.stage,
+          updatedAt: new Date(),
+        })
+        .where(eq(bookings.id, existingBooking.id));
+    }
+    // Case B: New client registration
+    else if (newClient) {
       if (!newClient.name || !newClient.email || !newClient.phone) {
         return NextResponse.json(
           { ok: false, error: "New client requires Name, Email, and Phone number" },
@@ -233,7 +281,6 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Check for existing client by email or phone
       const existingClient = await db
         .select()
         .from(clients)
@@ -260,7 +307,27 @@ export async function POST(req: NextRequest) {
           bookingsCount: 1,
         });
       }
-    } else if (resolvedClientId) {
+
+      targetBookingId = randomUUID();
+      await db.insert(bookings).values({
+        id: targetBookingId,
+        clientId: resolvedClientId,
+        artistId: user.id,
+        serviceType: serviceType || "Custom Tattoo",
+        designDescription: designDescription || null,
+        placement: placement || null,
+        approximateSize: approximateSize || null,
+        quotedAmount: quotedAmount ? BigInt(quotedAmount) : null,
+        stage: "scheduled",
+        sessionDate: start,
+        sessionDuration: duration,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      sessionNumber = 1;
+    }
+    // Case C: Existing client ID provided (without specific booking ID)
+    else if (resolvedClientId) {
       const client = await db.query.clients.findFirst({
         where: eq(clients.id, resolvedClientId),
       });
@@ -269,6 +336,57 @@ export async function POST(req: NextRequest) {
       }
       resolvedClientName = client.name;
       resolvedClientPhone = client.phone;
+
+      // Check if client already has an active, non-terminal booking
+      const activeBooking = await db.query.bookings.findFirst({
+        where: and(
+          eq(bookings.clientId, client.id),
+          ne(bookings.stage, "not_a_fit"),
+          ne(bookings.stage, "closed_followup")
+        ),
+        orderBy: [desc(bookings.createdAt)],
+      });
+
+      if (activeBooking) {
+        targetBookingId = activeBooking.id;
+        const existingSessionsCount = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(bookingSessions)
+          .where(eq(bookingSessions.bookingId, targetBookingId));
+
+        sessionNumber = Number(existingSessionsCount[0]?.count || 0) + 1;
+
+        await db
+          .update(bookings)
+          .set({
+            sessionDate: start,
+            sessionDuration: duration,
+            stage:
+              activeBooking.stage === "deposit_paid" || activeBooking.stage === "qualified"
+                ? "scheduled"
+                : activeBooking.stage,
+            updatedAt: new Date(),
+          })
+          .where(eq(bookings.id, targetBookingId));
+      } else {
+        targetBookingId = randomUUID();
+        await db.insert(bookings).values({
+          id: targetBookingId,
+          clientId: resolvedClientId,
+          artistId: user.id,
+          serviceType: serviceType || "Custom Tattoo",
+          designDescription: designDescription || null,
+          placement: placement || null,
+          approximateSize: approximateSize || null,
+          quotedAmount: quotedAmount ? BigInt(quotedAmount) : null,
+          stage: "scheduled",
+          sessionDate: start,
+          sessionDuration: duration,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        sessionNumber = 1;
+      }
     } else {
       return NextResponse.json(
         { ok: false, error: "Either select an existing client or enter new client details" },
@@ -276,23 +394,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. CREATE OR LINK BOOKING
-    const bookingId = randomUUID();
-    await db.insert(bookings).values({
-      id: bookingId,
-      clientId: resolvedClientId,
-      artistId: user.id,
-      serviceType: serviceType || "Tattoo",
-      designDescription: designDescription || null,
-      placement: placement || null,
-      approximateSize: approximateSize || null,
-      quotedAmount: quotedAmount ? BigInt(quotedAmount) : null,
-      stage: "scheduled",
-      sessionDate: start,
-      sessionDuration: duration,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    // 3. FORMAT MEETING / SESSION TYPE TAG IN NOTES
+    const chosenMeeting = meetingType || sessionType;
+    let meetingTag = "";
+    let meetingDisplayName = "Tattoo Session";
+
+    if (chosenMeeting === "consultation") {
+      meetingTag = "[Consultation]";
+      meetingDisplayName = "Design Consultation";
+    } else if (chosenMeeting === "touch_up") {
+      meetingTag = "[Touch-up]";
+      meetingDisplayName = "Touch-up Session";
+    } else if (chosenMeeting === "healed_review") {
+      meetingTag = "[Healed Review]";
+      meetingDisplayName = "Healed Photo Review";
+    } else {
+      meetingTag = `[Tattoo Session #${sessionNumber}]`;
+      meetingDisplayName = `Tattoo Session #${sessionNumber}`;
+    }
+
+    const formattedNotes = notes
+      ? notes.startsWith("[")
+        ? notes
+        : `${meetingTag} ${notes}`
+      : meetingTag;
 
     // 4. CREATE SESSION RECORD
     const sessionId = randomUUID();
@@ -300,13 +425,13 @@ export async function POST(req: NextRequest) {
       .insert(bookingSessions)
       .values({
         id: sessionId,
-        bookingId,
-        sessionNumber: 1,
+        bookingId: targetBookingId,
+        sessionNumber,
         scheduledStart: start,
         scheduledEnd: end,
         durationMinutes: duration,
         status: "scheduled",
-        notes: notes || null,
+        notes: formattedNotes || null,
         consentStatus: consentStatus || "not_started",
         overrideReason: allowOverlap ? "Artist override for schedule overlap" : null,
         createdAt: new Date(),
@@ -318,7 +443,7 @@ export async function POST(req: NextRequest) {
     try {
       if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_REFRESH_TOKEN) {
         await createSessionEvent({
-          summary: `Tattoo Session – ${resolvedClientName} (${serviceType})`,
+          summary: `${meetingDisplayName} – ${resolvedClientName} (${serviceType})`,
           description: [
             placement ? `Placement: ${placement}` : null,
             designDescription ? `Design: ${designDescription}` : null,
@@ -356,12 +481,12 @@ export async function POST(req: NextRequest) {
 
     const whatsappMessage =
       `Hi ${resolvedClientName}! ✨\n\n` +
-      `Your tattoo session with Prerna at Meet Prerna Studio is confirmed:\n` +
+      `Your ${meetingDisplayName.toLowerCase()} with Prerna at Meet Prerna Studio is confirmed:\n` +
       `📅 Date: ${dateFormatted}\n` +
       `⏰ Time: ${startTimeStr} – ${endTimeStr} (${durationHours} hrs)\n` +
-      `🎨 Service: ${serviceType}${placement ? ` (${placement})` : ""}\n` +
+      `🎨 Type: ${meetingDisplayName}${placement ? ` (${placement})` : ""}\n` +
       `📍 Studio: Indiranagar, Bangalore\n\n` +
-      `Please arrive 10 minutes early, well-hydrated and having eaten a good meal. Looking forward to creating your piece!`;
+      `Please arrive 10 minutes early. Looking forward to our session!`;
 
     const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(whatsappMessage)}`;
 
@@ -372,7 +497,7 @@ export async function POST(req: NextRequest) {
         scheduledStart: start.toISOString(),
         scheduledEnd: end.toISOString(),
       },
-      bookingId,
+      bookingId: targetBookingId,
       client: {
         id: resolvedClientId,
         name: resolvedClientName,

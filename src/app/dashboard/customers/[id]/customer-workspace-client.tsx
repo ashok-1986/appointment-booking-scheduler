@@ -419,6 +419,7 @@ export default function CustomerWorkspaceClient({
       <ScheduleSessionModal
         isOpen={isScheduleModalOpen}
         onClose={() => setIsScheduleModalOpen(false)}
+        customerId={initialData.customer.id}
         bookingId={activeBooking?.id || null}
         customerName={initialData.customer.name}
         onSuccess={handleRefresh}

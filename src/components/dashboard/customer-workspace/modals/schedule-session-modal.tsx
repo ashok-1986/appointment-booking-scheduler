@@ -6,31 +6,47 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Clock, Loader2, Sparkles } from "lucide-react";
+import { Calendar, Clock, Loader2, Sparkles, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 
 export function ScheduleSessionModal({
   isOpen,
   onClose,
+  customerId,
   bookingId,
   customerName,
   onSuccess,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  customerId?: string;
   bookingId: string | null;
   customerName: string;
   onSuccess: () => Promise<void>;
 }) {
+  const [meetingType, setMeetingType] = useState<string>("tattoo_session");
   const [scheduledStart, setScheduledStart] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("180");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const handleMeetingTypeChange = (val: string) => {
+    setMeetingType(val);
+    if (val === "consultation") {
+      setDurationMinutes("60");
+    } else if (val === "touch_up") {
+      setDurationMinutes("60");
+    } else if (val === "healed_review") {
+      setDurationMinutes("30");
+    } else {
+      setDurationMinutes("180");
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bookingId) {
-      toast.error("Please select an active tattoo project first");
+    if (!bookingId && !customerId) {
+      toast.error("Either select an existing client or choose a project first");
       return;
     }
     if (!scheduledStart) {
@@ -44,7 +60,10 @@ export function ScheduleSessionModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          bookingId,
+          bookingId: bookingId || undefined,
+          clientId: customerId || undefined,
+          meetingType,
+          sessionType: meetingType,
           scheduledStart,
           durationMinutes: Number(durationMinutes),
           notes,
@@ -56,7 +75,7 @@ export function ScheduleSessionModal({
         throw new Error(data.error || "Failed to schedule session");
       }
 
-      toast.success("Studio session scheduled & synced to calendar");
+      toast.success("Studio appointment scheduled & placed on calendar");
       await onSuccess();
       onClose();
     } catch (err: any) {
@@ -72,11 +91,32 @@ export function ScheduleSessionModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-heading text-xl">
             <Calendar className="size-5 text-[#C4FF61]" />
-            Schedule Session for {customerName}
+            Schedule Studio Appointment
           </DialogTitle>
+          <p className="text-xs text-muted-foreground">
+            Client: <strong className="text-foreground">{customerName}</strong>
+          </p>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2 text-xs">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1 text-xs">
+          {/* Meeting / Session Type Selector */}
+          <div>
+            <label className="block font-medium text-foreground mb-1">
+              Appointment / Meeting Type
+            </label>
+            <Select value={meetingType} onValueChange={handleMeetingTypeChange}>
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue placeholder="Select appointment type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tattoo_session">Tattoo Session (Inking / Shading)</SelectItem>
+                <SelectItem value="consultation">Design Consultation (Placement & Sizing)</SelectItem>
+                <SelectItem value="touch_up">Touch-up Session (Healed Refinement)</SelectItem>
+                <SelectItem value="healed_review">Healed Photo Review & Follow-up</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div>
             <label className="block font-medium text-foreground mb-1">
               Appointment Date & Start Time
@@ -92,31 +132,32 @@ export function ScheduleSessionModal({
 
           <div>
             <label className="block font-medium text-foreground mb-1">
-              Estimated Session Duration
+              Estimated Duration
             </label>
             <Select value={durationMinutes} onValueChange={setDurationMinutes}>
               <SelectTrigger className="h-9 text-xs">
                 <SelectValue placeholder="Select duration" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="60">1 hour (Consultation / Small Flash)</SelectItem>
+                <SelectItem value="30">30 minutes (Quick Review / Check-in)</SelectItem>
+                <SelectItem value="60">1 hour (Consultation / Small Flash / Touch-up)</SelectItem>
                 <SelectItem value="120">2 hours (Medium Piece)</SelectItem>
                 <SelectItem value="180">3 hours (Half-Day Session)</SelectItem>
                 <SelectItem value="240">4 hours (Extended Half-Day)</SelectItem>
-                <SelectItem value="360">6 hours (Full-Day Custom Sitting)</SelectItem>
-                <SelectItem value="480">8 hours (Full-Day Sleeve / Back)</SelectItem>
+                <SelectItem value="360">6 hours (Full-Day Sitting)</SelectItem>
+                <SelectItem value="480">8 hours (Full-Day Large Scale)</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div>
             <label className="block font-medium text-foreground mb-1">
-              Session Focus & Stencil Notes (Optional)
+              Appointment Focus & Notes (Optional)
             </label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Line work pass, shading background, needle grouping notes..."
+              placeholder="e.g. Placement stencil review, shading background pass, or touch-up color..."
               className="min-h-[70px] text-xs resize-none"
             />
           </div>
