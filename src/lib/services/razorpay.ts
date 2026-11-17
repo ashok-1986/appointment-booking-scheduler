@@ -138,5 +138,7 @@ export function verifyPaymentSignature(
     .createHmac("sha256", keySecret)
     .update(`${orderId}|${paymentId}`)
     .digest("hex");
-  return expected === signature;
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(signature, "utf8");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }

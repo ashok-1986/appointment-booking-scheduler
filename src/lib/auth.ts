@@ -4,13 +4,16 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./db";
 import { user, session, account, verification } from "./auth-schema";
 
-const netlifyUrl = process.env.URL || process.env.DEPLOY_PRIME_URL;
 const envAuthUrl =
   process.env.BETTER_AUTH_URL && !process.env.BETTER_AUTH_URL.includes("your-site-name")
     ? process.env.BETTER_AUTH_URL
     : undefined;
 const resolvedBaseUrl =
-  envAuthUrl || netlifyUrl || process.env.NEXT_PUBLIC_APP_URL || "https://bookmeetprerna.netlify.app";
+  envAuthUrl ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  process.env.URL ||
+  process.env.DEPLOY_PRIME_URL ||
+  "https://book.meetprerna.com";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -28,13 +31,14 @@ export const auth = betterAuth({
   },
   baseURL: {
     allowedHosts: [
-      "localhost:*",
-      "127.0.0.1:*",
-      "*.netlify.app",
-      "bookmeetprerna.netlify.app",
-      "*.netlify.com",
+      "book.meetprerna.com",
       "*.meetprerna.com",
       "meetprerna.com",
+      "bookmeetprerna.netlify.app",
+      "*.netlify.app",
+      "localhost:*",
+      "127.0.0.1:*",
+      "*.netlify.com",
     ],
     fallback: resolvedBaseUrl,
   },
@@ -49,13 +53,14 @@ export const auth = betterAuth({
     "http://localhost:3000",
     "http://127.0.0.1:4000",
     "http://127.0.0.1:3000",
+    "https://book.meetprerna.com",
+    "https://*.meetprerna.com",
+    "https://meetprerna.com",
     "https://bookmeetprerna.netlify.app",
     "https://*.netlify.app",
     "*.netlify.app",
     "https://*.netlify.com",
     "*.netlify.com",
-    "https://*.meetprerna.com",
-    "https://meetprerna.com",
     process.env.BETTER_AUTH_URL || "",
     process.env.NEXT_PUBLIC_APP_URL || "",
     process.env.URL || "",

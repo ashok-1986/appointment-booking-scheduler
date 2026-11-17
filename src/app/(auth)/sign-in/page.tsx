@@ -46,10 +46,11 @@ export default function SignInPage() {
     defaultValues: { email: "prerna@meetprerna.com", password: "" },
   });
 
+  const isDev = process.env.NODE_ENV === "development";
+
   function autofillPrerna() {
     form.setValue("email", "prerna@meetprerna.com");
-    form.setValue("password", "PrernaStudio2026!");
-    toast.info("Prerna's artist credentials populated");
+    toast.info("Prerna's artist email populated");
   }
 
   async function onSubmit(values: SignInValues) {
@@ -149,17 +150,26 @@ export default function SignInPage() {
               </form>
             </Form>
 
-            {/* Quick Demo Fill Pill */}
-            <div className="mt-5 pt-4 border-t border-zinc-200/80 text-center">
-              <button
-                type="button"
-                onClick={autofillPrerna}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600 hover:text-zinc-900 bg-white/70 hover:bg-white px-3 py-1.5 rounded-full border border-zinc-200 transition-all shadow-sm"
-              >
-                <KeyRound className="w-3.5 h-3.5 text-[#1A1A1A]" />
-                <span>Autofill Prerna's credentials</span>
-              </button>
-            </div>
+            {/* Studio Artist Note / Dev Helper */}
+            {isDev ? (
+              <div className="mt-5 pt-4 border-t border-zinc-200/80 text-center">
+                <button
+                  type="button"
+                  onClick={autofillPrerna}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600 hover:text-zinc-900 bg-white/70 hover:bg-white px-3 py-1.5 rounded-full border border-zinc-200 transition-all shadow-sm"
+                >
+                  <KeyRound className="w-3.5 h-3.5 text-[#1A1A1A]" />
+                  <span>Autofill Prerna&apos;s email (Dev)</span>
+                </button>
+              </div>
+            ) : (
+              <div className="mt-5 pt-4 border-t border-zinc-200/80 text-center">
+                <p className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
+                  <KeyRound className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Sign in with your studio email (<span className="font-medium text-zinc-700">prerna@meetprerna.com</span>)</span>
+                </p>
+              </div>
+            )}
           </CardContent>
           <CardFooter className="flex justify-center text-sm pb-6">
             <p className="text-zinc-500">
