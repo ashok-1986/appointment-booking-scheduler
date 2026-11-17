@@ -102,7 +102,7 @@ export default function FeedbackPage() {
             How was your session?
           </h1>
           <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-            {booking ? `${booking.client.name} – ${booking.serviceType}` : "Loading…"}
+            {booking ? `${booking.client.name} - ${booking.serviceType}` : "Loading..."}
           </p>
         </div>
         <Card>

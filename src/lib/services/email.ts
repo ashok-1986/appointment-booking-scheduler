@@ -108,7 +108,7 @@ export const EMAIL_TEMPLATES = {
       maximumFractionDigits: 0,
     }).format(amount / 100);
     return {
-      subject: `Payment receipt – ${kind} paid`,
+      subject: `Payment receipt: ${kind} paid`,
       text: `Hi ${name},\n\nWe received your ${kind} payment of ${formatted}.\nTransaction ID: ${transactionId}\n\nThank you!`,
       html: `<p>Hi ${name},</p><p>We received your ${kind} payment of <strong>${formatted}</strong>.</p><p>Transaction ID: <code>${transactionId}</code></p><p>Thank you!</p>`,
     };
@@ -124,7 +124,7 @@ export const EMAIL_TEMPLATES = {
     html: `<p>Hi ${name},</p><p>Your session is confirmed for <strong>${date}</strong>.</p><p>Studio address: ${address}</p><p>Preparation:</p><p>${preparation.replace(/\n/g, "<br/>")}</p>`,
   }),
   sessionReminder: (name: string, date: string, hours: number) => ({
-    subject: `Session reminder – ${hours}h before`,
+    subject: `Session reminder: ${hours}h before`,
     text: `Hi ${name},\n\nReminder: your session is in ${hours} hours (${date}).`,
     html: `<p>Hi ${name},</p><p>Reminder: your session is in <strong>${hours} hours</strong> (${date}).</p>`,
   }),

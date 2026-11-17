@@ -616,7 +616,7 @@ export default function GalleryPage() {
           <form onSubmit={handleUploadSubmit} className="space-y-5 pt-2">
             {/* File Dropzone */}
             <div className="space-y-2">
-              <Label className="text-xs font-medium">Select Images (JPEG, PNG, WebP — max 10MB each)</Label>
+              <Label className="text-xs font-medium">Select Images (JPEG, PNG, WebP, max 10MB each)</Label>
               <label className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-[#C4FF61] dark:hover:border-[#C4FF61] rounded-2xl p-6 cursor-pointer bg-zinc-50/50 dark:bg-zinc-900/40 transition-colors">
                 <Upload className="h-8 w-8 text-muted-foreground mb-2" />
                 <span className="text-xs font-medium text-foreground">

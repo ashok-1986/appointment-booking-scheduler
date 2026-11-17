@@ -20,6 +20,7 @@ import Image from "next/image";
 import confetti from "canvas-confetti";
 
 import { Button } from "@/components/ui/button";
+import StudioStandardsBento from "@/components/ui/studio-standards-bento";
 import {
   Form,
   FormControl,
@@ -73,6 +74,11 @@ export default function EnquiryPage() {
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const formSectionRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollToForm = () => {
+    formSectionRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const form = useForm<EnquiryFormValues>({
     resolver: zodResolver(enquiryFormSchema),
@@ -277,8 +283,18 @@ export default function EnquiryPage() {
 
   // ================= Intake Form Screen =================
   return (
-    <div className="min-h-screen bg-[#1A1A1A] py-10 px-4 sm:px-6 flex flex-col items-center justify-center font-montserrat selection:bg-[#C4FF61] selection:text-[#1A1A1A]">
-      <div className="w-full max-w-2xl bg-[#FDFFE9] rounded-3xl p-6 sm:p-12 shadow-2xl border border-[#1A1A1A]/10 text-[#1A1A1A]">
+    <div className="min-h-screen bg-[#1A1A1A] py-10 px-4 sm:px-6 flex flex-col items-center justify-start font-montserrat selection:bg-[#C4FF61] selection:text-[#1A1A1A]">
+      {/* Studio Standards & Artistry Bento Showcase */}
+      <div className="w-full max-w-6xl mb-12 animate-in fade-in duration-500">
+        <StudioStandardsBento onBookClick={scrollToForm} />
+      </div>
+
+      {/* Booking Intake Card */}
+      <div
+        ref={formSectionRef}
+        id="enquiry-form-card"
+        className="w-full max-w-2xl bg-[#FDFFE9] rounded-3xl p-6 sm:p-12 shadow-2xl border border-[#1A1A1A]/10 text-[#1A1A1A] scroll-mt-8"
+      >
         {/* Brand Logo Header */}
         <div className="flex flex-col items-center justify-center mb-8">
           <div className="relative w-52 h-20 sm:w-64 sm:h-24">
@@ -291,6 +307,12 @@ export default function EnquiryPage() {
             />
           </div>
           <div className="w-12 h-0.5 bg-[#C4FF61] mt-2 rounded-full" />
+          <h1 className="font-cormorant text-3xl sm:text-4xl font-medium tracking-tight mt-4 text-[#1A1A1A]">
+            Book a Studio Session
+          </h1>
+          <p className="font-montserrat text-xs sm:text-sm text-[#1A1A1A]/70 text-center mt-1">
+            Share your concept, placement, and timeline to receive a personalized proposal.
+          </p>
         </div>
 
         <Form {...form}>

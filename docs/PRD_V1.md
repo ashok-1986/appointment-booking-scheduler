@@ -1,7 +1,7 @@
 # MEETPRERNA Product Requirements Document (PRD)
 **Product:** Tattoo Artist Booking & Client Management Dashboard  
 **Version:** V1.0  
-**Status:** Proposed – Product Manager Review  
+**Status:** Proposed (Product Manager Review)  
 **Primary user:** Prerna, Tattoo Artist  
 **Platform:** Responsive Web Application, optimised for desktop and iPad
 
@@ -32,7 +32,7 @@ The current implementation of these features must be audited before development.
 
 ## 3. Target Users and Roles
 
-### 3.1 Artist – Prerna
+### 3.1 Artist (Prerna)
 - View and manage all customers.
 - Review enquiries and references.
 - Record consultation notes.
@@ -73,7 +73,7 @@ The artist should be able to access the most important actions without navigatin
 
 ## 5. Functional Requirements
 
-### FR-01: Customer Profile Management – P0
+### FR-01: Customer Profile Management (P0)
 
 Every enquiry must create or update a customer record.
 
@@ -124,7 +124,7 @@ The customer profile must contain:
 - Selecting a customer opens their complete history.
 - All bookings, payments, documents and photographs link to the correct customer.
 
-### FR-02: Enquiry Form and Submission Timestamp – P0
+### FR-02: Enquiry Form and Submission Timestamp (P0)
 
 Capture:
 - Full name
@@ -147,7 +147,7 @@ System requirements:
 
 **Acceptance criteria:** Every enquiry displays its original submission date and time, even after subsequent edits.
 
-### FR-03: Digital Tattoo Consent – P0
+### FR-03: Digital Tattoo Consent (P0)
 
 This is a mandatory feature.
 
@@ -192,7 +192,7 @@ Photography and marketing permissions must be independently selectable.
 
 **Session protection:** A tattoo session cannot be marked as Started unless the required consent is signed. Any exceptional override must record the reason and responsible user, subject to an approved policy.
 
-### FR-04: Tattoo Image Upload and Gallery – P0
+### FR-04: Tattoo Image Upload and Gallery (P0)
 
 Prerna must be able to upload photographs directly from her device, including iPad and desktop.
 
@@ -223,7 +223,7 @@ Image categories:
 
 The gallery is an internal customer-history feature, not automatically a public portfolio.
 
-### FR-05: Artist-Controlled Calendar – P0
+### FR-05: Artist-Controlled Calendar (P0)
 
 The calendar belongs to Prerna.
 
@@ -265,7 +265,7 @@ Customers must not directly select or reserve available appointment slots in V1.
 - Synchronise with the selected external calendar, if configured.
 - Do not automatically expose availability to customers.
 
-### FR-06: WhatsApp Automation – P0
+### FR-06: WhatsApp Automation (P0)
 
 WhatsApp should be the primary client communication channel, with email as a supporting channel.
 
@@ -299,7 +299,7 @@ Automated messages should be triggered by lifecycle events rather than indiscrim
 
 The system must respect WhatsApp's messaging rules and customer opt-in requirements.
 
-### FR-07: Booking and Payment Management – P0
+### FR-07: Booking and Payment Management (P0)
 
 Maintain the original PRD's Razorpay integration.
 
@@ -320,7 +320,7 @@ All transactions must be linked to the customer and booking.
 
 Use verified webhooks and idempotent processing.
 
-### FR-08: Aftercare and Follow-up – P1
+### FR-08: Aftercare and Follow-up (P1)
 
 After session completion:
 - Send the approved aftercare document.
@@ -450,7 +450,7 @@ Establish baseline figures before defining numeric targets.
 
 ## 13. Product Priorities
 
-**P0 – Required for V1 launch**
+**P0: Required for V1 launch**
 - Customer profiles.
 - Enquiry management and timestamps.
 - Seven-stage booking pipeline.
@@ -463,7 +463,7 @@ Establish baseline figures before defining numeric targets.
 - Session completion and aftercare.
 - Audit history.
 
-**P1 – Post-launch enhancement**
+**P1: Post-launch enhancement**
 - Healed-photo follow-ups.
 - Feedback and rating collection.
 - Repeat customer insights.

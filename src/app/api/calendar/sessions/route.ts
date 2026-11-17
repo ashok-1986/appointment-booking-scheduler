@@ -217,7 +217,7 @@ export async function POST(req: NextRequest) {
             start: new Date(c.scheduledStart).toISOString(),
             end: new Date(c.scheduledEnd).toISOString(),
           })),
-          error: `Scheduling Conflict: Overlaps with ${conflict.clientName}'s appointment (${conflictStart} – ${conflictEnd}). Check 'Override conflict' to schedule anyway.`,
+          error: `Scheduling Conflict: Overlaps with ${conflict.clientName}'s appointment (${conflictStart} to ${conflictEnd}). Check 'Override conflict' to schedule anyway.`,
         },
         { status: 409 }
       );
@@ -443,7 +443,7 @@ export async function POST(req: NextRequest) {
     try {
       if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_REFRESH_TOKEN) {
         await createSessionEvent({
-          summary: `${meetingDisplayName} – ${resolvedClientName} (${serviceType})`,
+          summary: `${meetingDisplayName} - ${resolvedClientName} (${serviceType})`,
           description: [
             placement ? `Placement: ${placement}` : null,
             designDescription ? `Design: ${designDescription}` : null,
@@ -483,7 +483,7 @@ export async function POST(req: NextRequest) {
       `Hi ${resolvedClientName}! ✨\n\n` +
       `Your ${meetingDisplayName.toLowerCase()} with Prerna at Meet Prerna Studio is confirmed:\n` +
       `📅 Date: ${dateFormatted}\n` +
-      `⏰ Time: ${startTimeStr} – ${endTimeStr} (${durationHours} hrs)\n` +
+      `⏰ Time: ${startTimeStr} to ${endTimeStr} (${durationHours} hrs)\n` +
       `🎨 Type: ${meetingDisplayName}${placement ? ` (${placement})` : ""}\n` +
       `📍 Studio: Indiranagar, Bangalore\n\n` +
       `Please arrive 10 minutes early. Looking forward to our session!`;

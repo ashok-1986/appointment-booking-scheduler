@@ -1,67 +1,55 @@
-# Meet Prerna — Bespoke Tattoo Appointment Booking Flow & Management Dashboard
+# Meet Prerna: Tattoo appointment booking and studio management
 
-An end-to-end bespoke appointment booking system, client intake portal, and 12-stage artist management dashboard crafted for **Meet Prerna Tattoo Studio**.
+Appointment booking, intake, and workflow management for Meet Prerna Tattoo Studio.
 
----
+## Visual identity
 
-## 🎨 Visual Identity & Brand Design System
+- Primary accent: Green (`#C4FF61`), used for active statuses and highlights.
+- Secondary accent: Yellow (`#EAFF27`), used for alerts and tags.
+- Background: Dark gray (`#1A1A1A`).
+- Surface: Off-white ivory (`#FDFFE9`).
+- Typography: Cormorant Garamond for headings; Montserrat for interface text and form controls; Geist Mono for currency, timestamps, and counts.
 
-* **Primary Accent**: Inchworm (`#C4FF61`) — Vibrant green for creativity and active status accents
-* **Secondary Accent**: Maximum Yellow (`#EAFF27`) — Optimistic yellow for alerts and timeline tags
-* **Background**: Eerie Black (`#1A1A1A`) — Editorial luxury dark canvas
-* **Contrast Base**: Ivory (`#FDFFE9`) — Soft luxury neutral surface
-* **Typography**:
-  * **Headings**: `Cormorant Garamond` (strictly for headers `h1`–`h6`, client dossier names, and hero titles)
-  * **Body & UI**: `Montserrat` (controls, inputs, buttons, badges, tables, and tabs)
-  * **Financial & Data**: `Geist Mono` (currency figures in ₹, timestamps, and stage counts)
+## Features
 
----
+### Client intake (`/enquiry`)
+- Intake form collecting contact info, birth date, preferred timeline, Instagram handle, and tattoo concept.
+- Image uploader for reference photos.
+- Confirmation screen with links to studio Instagram, Pinterest, website, and WhatsApp.
 
-## 🚀 Key Features
+### Artist dashboard (`/dashboard/bookings`)
+- Live counters for new enquiries, pending reviews, deposits, and scheduled sessions.
+- Filter bar for booking stages (leads, deposits, studio sessions, aftercare, closed).
+- Stage dropdown with counts for each status.
+- Booking cards with client contact details, timeline, photo thumbnails, and a direct WhatsApp link.
 
-### 1. Client-Facing Intake Flow (`/enquiry`)
-* High-converting, bespoke multi-field intake matching studio branding.
-* Full intake dossier: Full Name, Email, Phone, City, Date of Birth, Gender, Desired Tattoo Timeline (ASAP/This Week, 1–2 Months, 3+ Months, Flexible), Instagram Handle (`@`), and Tattoo Concept Description.
-* Drag-and-drop reference image uploader supporting multi-photo reference galleries.
-* Confetti celebration ending screen with direct studio links (Instagram, Pinterest, Website, and WhatsApp).
+### Client dossier and actions (`/dashboard/bookings/[id]`)
+- Step-by-step progress tracker covering each stage from initial enquiry to healed review.
+- Stage-specific actions:
+  - Stages 1 to 3: Record consultation notes and qualify or decline enquiries.
+  - Stages 4 to 5: Create Razorpay deposit links (30% deposit calculation, 72-hour expiry, sent via WhatsApp and email).
+  - Stages 6 to 7: Schedule sessions and collect digital consent signatures.
+  - Stages 8 to 9: Settle balance payments through Razorpay.
+  - Stages 10 to 11: Send healed photo requests and collect reviews.
+- Communication log with outbound and inbound messages, plus an inline WhatsApp reply box.
+- Reference image viewer for uploaded designs.
 
-### 2. Artist Studio Management Dashboard (`/dashboard/bookings`)
-* **Bento Grid Metrics**: Live counters for *Total Inflow*, *Needs Review*, *Deposit Stage*, and *Studio Sessions*.
-* **Streamlined Lifecycle Filter Bar**: Filters across phases (*All Bookings*, *Leads & Intake*, *Deposits*, *Studio Sessions*, *Aftercare*, *Not a Fit*).
-* **Precision 12-Stage Selector**: Color-coded stage dropdown with live counts.
-* **Rich Booking Cards**: Client initials avatar ringed in `#C4FF61`, City & Instagram chips, timeline badge, reference photo thumbnail preview, 1-click direct WhatsApp chat link, and "Manage Dossier" CTA.
+## Tech stack
 
-### 3. Client Dossier & Lifecycle Actions (`/dashboard/bookings/[id]`)
-* **12-Stage Visual Pipeline Stepper**: Tracks status from initial lead to healed photo completion.
-* **Context-Aware Action Center**:
-  * **Stages 1–3**: Consultation vetting (In Consultation, Qualify, Not a Fit with courteous reason).
-  * **Stages 4–5**: Razorpay deposit payment link generation (auto 30% calculation, WhatsApp & Email dispatch, 72h expiry).
-  * **Stage 6–7**: Calendar scheduling & digital consent form gate (with legal paper override audit trail).
-  * **Stage 8–9**: Balance payment settlement via Razorpay.
-  * **Stages 10–11**: 3-week healed photo follow-up and 5-star satisfaction review collection.
-* **Live Activity & Comms Timeline**: Inbound/outbound message bubbles with an embedded direct WhatsApp reply composer.
-* **Reference Designs Gallery**: Lightbox modal to inspect high-resolution tattoo reference uploads.
+- Framework: [Next.js](https://nextjs.org/) (App Router, React 19)
+- Styling: [Tailwind CSS v4](https://tailwindcss.com/)
+- Database and ORM: [Drizzle ORM](https://orm.drizzle.team/) with [Supabase](https://supabase.com/) PostgreSQL
+- Authentication: [Better Auth](https://better-auth.com/)
+- Integrations:
+  - Razorpay: Payment links and webhook handling
+  - HubSpot: Contact and deal synchronization
+  - WhatsApp Cloud API: Client messages and notifications
+  - Google Calendar: Appointment scheduling
 
----
-
-## 🛠️ Tech Stack
-
-* **Framework**: [Next.js](https://nextjs.org/) (App Router, React 19)
-* **Styling**: [Tailwind CSS v4](https://tailwindcss.com/) with `@theme inline` font tokens
-* **Database & ORM**: [Drizzle ORM](https://orm.drizzle.team/) with [Supabase](https://supabase.com/) PostgreSQL (Session Pooler)
-* **Authentication**: [Better Auth](https://better-auth.com/) with role-based access control (`artist`, `studio_admin`)
-* **Integrations**:
-  * **Razorpay**: Payment links & webhook lifecycle synchronization
-  * **HubSpot CRM**: Two-way contact and deal property syncing
-  * **WhatsApp Cloud API**: Automated client notifications & direct chatting
-  * **Google Calendar**: Session scheduling & booking coordination
-
----
-
-## 📦 Getting Started
+## Getting started
 
 ### Prerequisites
-* [Bun](https://bun.sh/) (preferred package manager) or Node.js 20+
+- [Bun](https://bun.sh/) (recommended) or Node.js 20+
 
 ### Installation
 
@@ -85,14 +73,12 @@ bun run dev --port 4000
 
 Open [http://localhost:4000/dashboard/bookings](http://localhost:4000/dashboard/bookings) in your browser.
 
----
+## Security and environment variables
 
-## 🔒 Security & Environment Variables
+Copy `.env.example` to `.env` and fill in the required values:
 
-Copy `.env.example` to `.env` and provide your API keys:
-
-* `DATABASE_URL`: PostgreSQL connection string (Supabase IPv4 Pooler)
-* `BETTER_AUTH_SECRET`: Secret key for session encryption
-* `RAZORPAY_KEY_ID` & `RAZORPAY_KEY_SECRET`: Razorpay credentials
-* `HUBSPOT_ACCESS_TOKEN`: HubSpot private app token
-* `WHATSAPP_TOKEN` & `WHATSAPP_PHONE_NUMBER_ID`: Meta WhatsApp Cloud API credentials
+- `DATABASE_URL`: PostgreSQL connection string (Supabase IPv4 Pooler)
+- `BETTER_AUTH_SECRET`: Secret key for session encryption
+- `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`: Razorpay API credentials
+- `HUBSPOT_ACCESS_TOKEN`: HubSpot private app token
+- `WHATSAPP_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID`: Meta WhatsApp Cloud API credentials

@@ -1,41 +1,33 @@
-# MeetPrerna V1 Architecture Specification & Technical Design
-**Document:** Technical Design & Implementation Contract  
-**Target:** MeetPrerna Tattoo Artist Booking & Client Management System  
-**Version:** 1.1 (Agreed Architecture: Booking as Project Container)  
-**Status:** In Review – Architectural Alignment Gate  
+# MeetPrerna v1 technical architecture
 
----
+Document: Technical design and implementation plan  
+Target: Tattoo booking and client management system  
+Version: 1.1 (Booking as project container)  
+Status: In review
 
-## 1. Executive Summary & Problem Formulation
+## 1. Summary
 
-The MeetPrerna platform is transitioning from a 12-stage linear pipeline to an entity-relational model centered on:
-**Customer → Booking (Tattoo Project Container) → Sessions → (Consent Records / Media Assets / Payments)**
+The platform uses an entity-relational model centered on:
+Customer -> Booking (Project Container) -> Sessions -> (Consent Records, Media Assets, Payments)
 
-### Key Architectural Decision
-Per consensus, `Booking` serves as the creative tattoo project container and commercial arrangement. Under each booking, dedicated relational tables manage:
-1. **`sessions`**: Distinct physical studio appointments (supports single-session and multi-session tattoo projects).
-2. **`media_assets`**: Categorized image repository (references, design concepts, before-session, fresh tattoos, healed follow-ups, touch-ups).
-3. **`consent_records`**: Session-specific legal documents with iPad touch canvas signatures, health disclosures, separate photo/marketing permissions, and generated PDFs.
-4. **`payments`**: Razorpay deposit and balance transactions.
+In this design, a booking is the creative tattoo project container and commercial agreement. Under each booking, dedicated relational tables manage:
+1. Sessions: Studio appointments (for single-session or multi-session tattoos).
+2. Media assets: Categorized images (references, designs, before photos, fresh tattoos, healed follow-ups, touch-ups).
+3. Consent records: Signed legal documents with touchscreen signatures, health disclosures, separate photo and marketing permissions, and generated PDFs.
+4. Payments: Razorpay deposit and balance transactions.
 
-This architecture preserves existing database integrity on Supabase, eliminates complex intermediate tables, and delivers solutions for all six confirmed deficiencies (CD-01 to CD-06).
+## 2. Deficiencies and resolutions
 
----
-
-## 2. Technical Audit & Resolution Matrix (CD-01 to CD-06)
-
-| Defect ID | Defect Description | Existing Implementation State | Target V1 Solution |
+| Defect ID | Problem | Existing state | Target solution |
 |---|---|---|---|
-| **CD-01** | No customer profile view | `clients` table exists, but no dedicated customer directory or profile pages exist. Data is only accessible inside isolated booking records. | New routes: `/dashboard/customers` (searchable directory by name, email, phone) and `/dashboard/customers/[id]` (complete history of all tattoo projects, sessions, lifetime spend, signed consent documents, and photo gallery). |
-| **CD-02** | No usable customer consent workflow | `consent_forms` exists, but `/consent/[bookingId]` uses a text input instead of an iPad touch canvas signature. Photo and marketing consent are lumped together. No PDF generated. Sessions can be started without consent. | New iPad-optimized signature route at `/consent/[sessionId]` using HTML5 canvas pointer events, separate procedure/photo/marketing consent toggles, automated PDF document generation, and a hard dashboard gate preventing session start if unsigned. |
-| **CD-03** | No post-tattoo image management | Only an un-categorized array of URLs (`reference_images`) on the booking record. No session association or category tagging. | Dedicated `media_assets` table and `/dashboard/gallery` view supporting multi-file uploads tagged with category (`reference`, `design`, `before`, `fresh`, `healed`, `touch_up`), booking ID, and session ID. |
-| **CD-04** | Missing WhatsApp nudges | Cloud API calls fail outside the 24-hour customer window when sending freeform text without approved templates. | Event-driven notification engine that logs lifecycle triggers, dispatches approved templates where available, and provides Prerna with a guaranteed 1-click `wa.me` deep-link with pre-formatted text. |
-| **CD-05** | No artist-controlled calendar experience | `artist_availability` exists, but no calendar user interface exists. Appointments are set by manually typing date strings in booking fields. | New route `/dashboard/calendar` offering Month, Week, Day, and Agenda views. Prerna manages sessions with conflict detection. Zero customer self-booking. |
-| **CD-06** | Missing form submission date/time | Timestamps stored in UTC in the database, but omitted or unformatted in dashboard tables and cards. | Formatted UTC and local studio time (IST) displayed across all dashboard views, accompanied by relative elapsed time ("Submitted 2 hours ago"). |
+| CD-01 | No customer profile view | `clients` table exists, but there is no customer directory or profile page. Data is only accessible inside isolated booking records. | New routes: `/dashboard/customers` (directory searchable by name, email, and phone) and `/dashboard/customers/[id]` (full history of tattoo projects, sessions, lifetime spend, signed consent records, and photos). |
+| CD-02 | No usable consent workflow | `consent_forms` exists, but `/consent/[bookingId]` uses a text input instead of a touch signature. Photo and marketing consent are combined. No PDF is generated. Sessions can start without consent. | New signature route at `/consent/[sessionId]` using HTML5 canvas pointer events, separate procedure, photo, and marketing consent toggles, PDF generation, and a dashboard check that prevents starting a session if unsigned. |
+| CD-03 | No post-tattoo photo management | Only an uncategorized list of URLs (`reference_images`) on the booking record. No session association or category tagging. | Dedicated `media_assets` table and `/dashboard/gallery` view supporting multi-file uploads tagged with category (`reference`, `design`, `before`, `fresh`, `healed`, `touch_up`), booking ID, and session ID. |
+| CD-04 | Missing WhatsApp notifications | Cloud API calls fail outside the 24-hour window when sending freeform text without approved templates. | Event-driven notification engine that logs triggers, dispatches approved templates where available, and provides a direct `wa.me` link with pre-filled text in the dashboard. |
+| CD-05 | No artist-controlled calendar | `artist_availability` exists, but there is no calendar UI. Appointments are set by manually typing date strings in booking fields. | New route `/dashboard/calendar` with Month, Week, Day, and Agenda views. The artist manages sessions with conflict detection. Customers cannot self-book. |
+| CD-06 | Missing submission date and time | Timestamps are stored in UTC in the database, but omitted or unformatted in dashboard tables and cards. | UTC and local studio time (IST) displayed across all dashboard views, accompanied by relative elapsed time ("Submitted 2 hours ago"). |
 
----
-
-## 3. Entity Relational Architecture
+## 3. Entity-relational model
 
 ```
 Customer (clients table)
@@ -67,36 +59,31 @@ Customer (clients table)
   │           └── Type (deposit | balance), Amount, Razorpay ID, Status
 ```
 
----
+## 4. Booking lifecycle stages
 
-## 4. The 7-Stage Booking Lifecycle Specification
+The booking pipeline has seven sequential stages. Secondary requirements (consent, calendar, media, payments) are tracked as independent attributes.
 
-The booking pipeline is standardized into seven clear operational phases. Secondary requirements (Consent, Calendar, Media, Payments) operate as independent state attributes.
+### Primary stages
 
-### Primary Lifecycle Stages
+1. `new_enquiry`: Form received, submission timestamp logged, customer profile matched or created.
+2. `consultation_review`: The artist evaluates the design concept, placement, sizing, and references, and records notes.
+3. `deposit_pending`: Quote established and deposit payment link sent to the customer.
+4. `confirmed_scheduled`: Deposit verified and appointment booked on the calendar.
+5. `session_completed`: Digital consent verified, tattoo procedure completed, and fresh photos captured.
+6. `payment_pending`: Final balance payment requested and tracked.
+7. `closed_followup`: Balance settled, aftercare instructions sent, and 4-week healed photo follow-up scheduled.
 
-1. **`new_enquiry`**: Form received, submission timestamp logged, customer profile matched/created.
-2. **`consultation_review`**: Prerna evaluates the design idea, placement, sizing, and references. Notes recorded.
-3. **`deposit_pending`**: Quote established and deposit payment link dispatched to customer.
-4. **`confirmed_scheduled`**: Deposit verified. Appointment booked on Prerna's calendar.
-5. **`session_completed`**: Digital consent verified on iPad. Tattoo procedure completed. Fresh photos captured.
-6. **`payment_pending`**: Final balance payment requested and tracked.
-7. **`closed_followup`**: Balance settled. Aftercare instructions sent. 4-week healed photo follow-up scheduled.
+### Independent attributes
 
-### Independent Operational Attributes (Orthogonal to Pipeline)
+- Consent status: `not_started`, `pending`, `signed`, or `overridden`. A session cannot move to `in_progress` or `session_completed` unless consent is `signed` or explicitly overridden with a recorded reason.
+- Deposit status: `not_requested`, `pending`, `paid`, or `expired`.
+- Balance status: `not_requested`, `pending`, `paid`, or `overdue`.
+- Calendar status: `unscheduled`, `scheduled`, `rescheduled`, or `cancelled`.
+- Follow-up status: `scheduled`, `sent`, `completed`, or `snoozed`.
 
-- **Consent Status**: `not_started` | `pending` | `signed` | `overridden`
-  - *Hard Invariant*: Session cannot transition to `in_progress` or `session_completed` unless Consent Status is `signed` (or explicitly overridden with an audit justification).
-- **Deposit Status**: `not_requested` | `pending` | `paid` | `expired`
-- **Balance Status**: `not_requested` | `pending` | `paid` | `overdue`
-- **Calendar Status**: `unscheduled` | `scheduled` | `rescheduled` | `cancelled`
-- **Follow-up Status**: `scheduled` | `sent` | `completed` | `snoozed`
+## 5. Database schema (Drizzle ORM)
 
----
-
-## 5. Database Schema Specifications (Drizzle ORM)
-
-### 5.1 Updated `clients` Table
+### 5.1 Updated `clients` table
 ```ts
 // Existing clients table extended with profile analytics
 export const clients = pgTable("clients", {
@@ -116,7 +103,7 @@ export const clients = pgTable("clients", {
 });
 ```
 
-### 5.2 Updated `bookings` Table (7 Stages + Container Attributes)
+### 5.2 Updated `bookings` table
 ```ts
 export const bookingStageEnum = pgEnum("booking_stage", [
   "new_enquiry",
@@ -154,7 +141,7 @@ export const bookings = pgTable("bookings", {
 });
 ```
 
-### 5.3 New `sessions` Table
+### 5.3 New `sessions` table
 ```ts
 export const sessionStatusEnum = pgEnum("session_status", [
   "scheduled",
@@ -181,7 +168,7 @@ export const sessions = pgTable("sessions", {
 });
 ```
 
-### 5.4 New `media_assets` Table
+### 5.4 New `media_assets` table
 ```ts
 export const mediaCategoryEnum = pgEnum("media_category", [
   "reference",
@@ -205,7 +192,7 @@ export const mediaAssets = pgTable("media_assets", {
 });
 ```
 
-### 5.5 Upgraded `consent_records` Table
+### 5.5 Upgraded `consent_records` table
 ```ts
 export const consentRecords = pgTable("consent_records", {
   id: text("id").primaryKey(),
@@ -227,80 +214,72 @@ export const consentRecords = pgTable("consent_records", {
   procedureConsent: boolean("procedure_consent").notNull(),
   photographyConsent: boolean("photography_consent").notNull(),
   marketingConsent: boolean("marketing_consent").notNull(),
-  signatureImageUrl: text("signature_image_url").notNull(), // Data URL / stored PNG of iPad touch stroke
-  pdfUrl: text("pdf_url"), // Generated legal PDF URL
+  signatureImageUrl: text("signature_image_url").notNull(),
+  pdfUrl: text("pdf_url"),
   signerIp: text("signer_ip"),
   signerUserAgent: text("signer_user_agent"),
   signedAt: timestamp("signed_at", { withTimezone: true }).defaultNow().notNull(),
 });
 ```
 
----
+## 6. Screen architecture and navigation
 
-## 6. Screen Architecture & Dashboard Navigation
+The top navigation header in `src/app/dashboard/layout.tsx` includes:
 
-The top navigation header in `src/app/dashboard/layout.tsx` is updated to expose all six core operational areas:
+`[Meet Prerna Logo]  Artist Studio  |  Overview  |  Bookings  |  Customers  |  Calendar  |  Gallery  |  Payments`
 
-```
-[Meet Prerna Logo]  Artist Studio  |  Overview  |  Bookings  |  Customers  |  Calendar  |  Gallery  |  Payments
-```
+### 6.1 Customer directory and profile (`/dashboard/customers` and `/dashboard/customers/[id]`)
+- Directory: Search across name, phone, email, and Instagram. Shows lifetime spend and total bookings.
+- Customer profile:
+  - Header with contact details, first visit date, total revenue, and WhatsApp link.
+  - Project history with stage indicators.
+  - Chronological list of attended studio sessions.
+  - Document archive with links to signed consent PDFs.
+  - Photo grid for references, fresh tattoos, and healed follow-ups.
 
-### 6.1 Customer Profile View (`/dashboard/customers` & `/dashboard/customers/[id]`) – CD-01
-- **Directory**: Real-time search across customer name, phone, email, and Instagram. Shows lifetime spend and total bookings.
-- **Dossier Detail**:
-  - Header: Contact info, first visit date, total revenue, quick WhatsApp button.
-  - Active & Past Bookings: Full project history with current stage badges.
-  - Session Timeline: Chronological list of all studio sessions attended.
-  - Documents Archive: Direct links to view/download signed consent PDFs.
-  - Client Media: Chronological photo grid of references, fresh tattoos, and healed follow-ups.
+### 6.2 iPad digital consent (`/consent/[sessionId]`)
+- Signature pad: HTML5 canvas component handling pointer events (`pointerdown`, `pointermove`, `pointerup`), retina scaling, and stroke clearing.
+- Form steps:
+  1. Identity and birth date check (verifies 18+).
+  2. Health disclosures (allergies, skin conditions, blood thinners).
+  3. Risk and procedure acknowledgement.
+  4. Separate permissions:
+     - Procedure consent (mandatory).
+     - Photography for studio records (optional).
+     - Marketing and portfolio use on social media (optional).
+  5. Touchscreen signature canvas.
+- PDF generation: Assembles a document with timestamps, disclosures, and the signature image.
+- Session protection: The dashboard checks consent status and prevents starting a session until signed or overridden with a recorded justification.
 
-### 6.2 iPad Touchscreen Digital Consent (`/consent/[sessionId]`) – CD-02
-- **Touchscreen Canvas**: Custom `<SignaturePad>` component handling pointer events (`pointerdown`, `pointermove`, `pointerup`), retina scaling, and stroke clearing.
-- **Form Steps**:
-  1. Identity & DOB check (verifies 18+).
-  2. Health Disclosures (allergies, skin conditions, blood thinners).
-  3. Risk & Procedure Acknowledgement.
-  4. Separate Permissions:
-     - Checkbox A: Consent to tattoo procedure (Mandatory).
-     - Checkbox B: Consent to photograph tattoo for studio records (Optional).
-     - Checkbox C: Consent to use photographs on social media / marketing (Optional).
-  5. Touchscreen Signature Canvas.
-- **PDF Generation**: Client/server PDF assembler generating a signed document with exact timestamp, legal disclosures, and embedded signature graphic.
-- **Session Protection**: The "Start Session" button in the booking dossier checks `consent_status`. If unsigned, a modal blocks the artist until signed or an explicit override reason is submitted.
+### 6.3 Tattoo photo management (`/dashboard/gallery`)
+- Upload modal: Select category (`reference`, `design`, `before`, `fresh`, `healed`, `touch_up`), customer, and session.
+- Dossier uploads: In `/dashboard/bookings/[id]`, photos can be dropped into fresh or healed photo slots.
+- Gallery grid: Filterable by client, category, and date.
 
-### 6.3 Tattoo Media Management & Gallery (`/dashboard/gallery`) – CD-03
-- **Upload Modal**: Select category (`reference`, `design`, `before`, `fresh`, `healed`, `touch_up`), customer, and session.
-- **Direct Dossier Uploads**: In `/dashboard/bookings/[id]`, artists can drag and drop photos directly into the "Fresh Photos" or "Healed Photos" slots.
-- **Gallery Grid**: Filterable by client, category, and date.
+### 6.4 WhatsApp notifications
+1. Trigger event occurs (such as booking confirmed, 48-hour reminder, or session completed).
+2. The event is recorded in the `messages` table.
+3. Notification engine formats the message text.
+4. The dashboard displays a direct `wa.me` button, ensuring delivery even if Meta Cloud API has an expired 24-hour customer window.
 
-### 6.4 WhatsApp Lifecycle Trigger Engine – CD-04
-- **Dual Dispatch Flow**:
-  1. Trigger event occurs (e.g. Booking confirmed, Cron 48h, Session completed).
-  2. Creates entry in `messages` table.
-  3. Pre-formats approved message text.
-  4. Provides artist with immediate 1-click `wa.me` button in the dashboard, ensuring delivery even if Meta Cloud API has an expired 24h window.
+### 6.5 Artist calendar (`/dashboard/calendar`)
+- Views: Month, Week, Day, and Agenda.
+- Actions:
+  - Click any time slot to schedule a session.
+  - Select an existing customer or add a new one.
+  - Set start time, duration, and notes.
+  - Overlap check detects conflicts and prompts for confirmation.
+  - Customers cannot book or view slots.
 
-### 6.5 Artist-Controlled Calendar (`/dashboard/calendar`) – CD-05
-- **Views**: Month, Week, Day, and Agenda views.
-- **Interactive Actions**:
-  - Click on time slot to create a new session.
-  - Select customer from autocomplete dropdown or create new.
-  - Set start time, duration, and tattoo project notes.
-  - Overlap check detects conflicting appointments and warns the artist.
-  - Customers have zero access to calendar slots.
+### 6.6 Submission timestamps
+- Formats:
+  - Absolute: `format(createdAt, "d MMM yyyy, h:mm a")` (for example, `17 Nov 2026, 4:30 PM IST`).
+  - Relative: `formatDistanceToNow(createdAt, { addSuffix: true })` (for example, `2 hours ago`).
+- Displayed on enquiry cards, table rows, and dossier headers.
 
-### 6.6 Accurate Submission Timestamps – CD-06
-- **Formatting Rule**:
-  - Absolute: `format(createdAt, "d MMM yyyy, h:mm a")` (e.g., `17 Nov 2026, 4:30 PM IST`).
-  - Relative: `formatDistanceToNow(createdAt, { addSuffix: true })` (e.g., `2 hours ago`).
-  - Displayed prominently on all enquiry cards, table rows, and dossier headers.
+## 7. Implementation phases
 
----
-
-## 7. Next Steps & Implementation Gate
-
-To proceed safely with zero downtime:
-1. **Step 1 (Schema & Migrations)**: Generate and run Drizzle migrations to create `sessions`, `media_assets`, and updated `consent_records`. Run backfill script creating an initial session for each existing booking with a `session_date`.
-2. **Step 2 (State Machine & API Update)**: Update `src/lib/state-machine.ts` to the 7-stage pipeline and update tests.
-3. **Step 3 (UI Implementation)**: Build `/dashboard/customers`, `/dashboard/calendar`, `/dashboard/gallery`, and `/consent/[sessionId]`.
-4. **Step 4 (Verification)**: Run `bun test` and `tsc --noEmit`.
+1. Schema and migrations: Create `sessions`, `media_assets`, and updated `consent_records`. Run backfill for existing bookings with session dates.
+2. State machine and API: Update `src/lib/state-machine.ts` to the 7-stage pipeline and update tests.
+3. UI implementation: Build `/dashboard/customers`, `/dashboard/calendar`, `/dashboard/gallery`, and `/consent/[sessionId]`.
+4. Verification: Run `bun test` and type checking.

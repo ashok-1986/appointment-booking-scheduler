@@ -484,7 +484,7 @@ export default function ConsentPage() {
                     <span className="text-zinc-500 block">Allergies:</span>
                     <span className="font-medium text-zinc-900 dark:text-zinc-200">
                       {signedRecord.healthDisclosures?.allergies
-                        ? `Yes – ${signedRecord.healthDisclosures.allergiesDetails || "Reported"}`
+                        ? `Yes: ${signedRecord.healthDisclosures.allergiesDetails || "Reported"}`
                         : "None reported"}
                     </span>
                   </div>
@@ -498,7 +498,7 @@ export default function ConsentPage() {
                     <span className="text-zinc-500 block">Skin Conditions:</span>
                     <span className="font-medium text-zinc-900 dark:text-zinc-200">
                       {signedRecord.healthDisclosures?.skinConditions
-                        ? `Yes – ${signedRecord.healthDisclosures.skinConditionsDetails || "Reported"}`
+                        ? `Yes: ${signedRecord.healthDisclosures.skinConditionsDetails || "Reported"}`
                         : "None reported"}
                     </span>
                   </div>

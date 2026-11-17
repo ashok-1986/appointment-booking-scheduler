@@ -337,7 +337,7 @@ export default function CalendarPage() {
       `Hi ${session.client.name}! ✨\n\n` +
       `Your tattoo session with Prerna at Meet Prerna Studio is confirmed:\n` +
       `📅 Date: ${dateFormatted}\n` +
-      `⏰ Time: ${startTimeStr} – ${endTimeStr} (${durationHours} hrs)\n` +
+      `⏰ Time: ${startTimeStr} to ${endTimeStr} (${durationHours} hrs)\n` +
       `🎨 Service: ${session.booking.serviceType}${session.booking.placement ? ` (${session.booking.placement})` : ""}\n` +
       `📍 Studio: Indiranagar, Bangalore\n\n` +
       `Please arrive 10 minutes early, well-hydrated and having eaten a good meal. Looking forward to creating your piece!`;
@@ -414,7 +414,7 @@ export default function CalendarPage() {
       return `${startOfWeek.toLocaleDateString(locale, {
         month: "short",
         day: "numeric",
-      })} – ${endOfWeek.toLocaleDateString(locale, {
+      })} to ${endOfWeek.toLocaleDateString(locale, {
         month: "short",
         day: "numeric",
         year: "numeric",
@@ -914,7 +914,7 @@ export default function CalendarPage() {
                           <div className="text-[11px] text-muted-foreground flex items-center gap-1">
                             <Clock className="h-3 w-3" />
                             <span>
-                              {start} – {end}
+                              {start} to {end}
                             </span>
                           </div>
 
@@ -1028,7 +1028,7 @@ export default function CalendarPage() {
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1 text-foreground font-medium">
                             <Clock className="h-3.5 w-3.5 text-zinc-500" />
-                            {start} – {end} ({durationHours} hrs)
+                            {start} to {end} ({durationHours} hrs)
                           </span>
                           <span>Service: {session.booking.serviceType}</span>
                           {session.booking.placement && (
@@ -1145,7 +1145,7 @@ export default function CalendarPage() {
                 const timeStr = `${start.toLocaleTimeString([], {
                   hour: "numeric",
                   minute: "2-digit",
-                })} – ${end.toLocaleTimeString([], {
+                })} to ${end.toLocaleTimeString([], {
                   hour: "numeric",
                   minute: "2-digit",
                 })}`;
@@ -1242,7 +1242,7 @@ export default function CalendarPage() {
                     hour: "numeric",
                     minute: "2-digit",
                   })}{" "}
-                  –{" "}
+                  to{" "}
                   {new Date(detectedConflict.scheduledEnd).toLocaleTimeString([], {
                     hour: "numeric",
                     minute: "2-digit",
@@ -1561,7 +1561,7 @@ export default function CalendarPage() {
                       hour: "numeric",
                       minute: "2-digit",
                     })}{" "}
-                    –{" "}
+                    to{" "}
                     {new Date(selectedSession.scheduledEnd).toLocaleTimeString([], {
                       hour: "numeric",
                       minute: "2-digit",

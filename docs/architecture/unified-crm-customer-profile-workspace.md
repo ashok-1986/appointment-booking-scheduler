@@ -54,11 +54,11 @@ The existing appointment booking and customer management system suffers from fra
 3. **Circular Hyperlinks**: `booking-detail-client.tsx` has a link to `/dashboard/customers/[id]`, while `customer-dossier-client.tsx` contains links on every project and session card back to `/dashboard/bookings/[id]`.
 4. **Data Query Inefficiency**: `getCustomerProfile()` executes an N+1 waterfall query via `Promise.all` across bookings to fetch sessions and payments, while messages remain unindexed by customer.
 
-### 1.2 The HubSpot CRM Solution
-To solve this fragmentation permanently, this architecture consolidates the entire client lifecycle into a unified **3-Column CRM Customer Profile Workspace** at `/dashboard/customers/[id]`, modeled after HubSpot’s contact record architecture:
-- **Left Column (Context & Attributes — 25% width)**: Fixed customer identity, one-click quick action shortcuts (WhatsApp, Email, Call, Notes), "About this Client" attributes, pinned medical/aesthetic alerts, and private artist consultation notes.
-- **Center Column (Action Workspace — 50% width)**: Primary working zone featuring the active tattoo project summary, canonical 7-stage visual pipeline progression bar, dynamic current stage action execution center, and chronological multi-channel communication timeline.
-- **Right Column (Contextual Records — 25% width)**: Embedded secondary objects including project switchers, upcoming sessions with inline calendar scheduling, media gallery with in-profile upload, financial ledger with Razorpay tracking, and digital legal consent records with paper override gates.
+### 1.2 Unified CRM profile layout
+To resolve fragmentation, the client lifecycle is consolidated into a 3-column workspace at `/dashboard/customers/[id]`, modeled after standard CRM contact records:
+- Left column (context and attributes, 25% width): Customer identity, quick actions (WhatsApp, email, call, notes), attributes, health and placement alerts, and consultation notes.
+- Center column (action workspace, 50% width): Active tattoo project summary, 7-stage visual pipeline, current stage actions, and communication timeline.
+- Right column (contextual records, 25% width): Project switcher, upcoming sessions with inline scheduling, photo gallery with upload, financial ledger with Razorpay tracking, and signed consent records.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
