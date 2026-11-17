@@ -498,6 +498,43 @@ export const bookingsRelations = relations(bookings, ({ one, many }) => ({
   payments: many(payments),
   mediaAssets: many(mediaAssets),
   consentRecords: many(consentRecords),
+  messages: many(messages),
+  consentForm: one(consentForms, {
+    fields: [bookings.id],
+    references: [consentForms.bookingId],
+  }),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  booking: one(bookings, {
+    fields: [messages.bookingId],
+    references: [bookings.id],
+  }),
+}));
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  booking: one(bookings, {
+    fields: [payments.bookingId],
+    references: [bookings.id],
+  }),
+}));
+
+export const consentFormsRelations = relations(consentForms, ({ one }) => ({
+  booking: one(bookings, {
+    fields: [consentForms.bookingId],
+    references: [bookings.id],
+  }),
+}));
+
+export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
+  booking: one(bookings, {
+    fields: [auditLogs.bookingId],
+    references: [bookings.id],
+  }),
+  user: one(users, {
+    fields: [auditLogs.userId],
+    references: [users.id],
+  }),
 }));
 
 export const bookingSessionsRelations = relations(

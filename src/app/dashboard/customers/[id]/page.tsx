@@ -1,27 +1,34 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth-utils";
-import { getCustomerProfile } from "@/lib/customers";
-import CustomerDossierClient from "./customer-dossier-client";
+import { getUnifiedCustomerWorkspaceData } from "@/lib/customers";
+import CustomerWorkspaceClient from "./customer-workspace-client";
+import { serializeBigInts } from "@/lib/route-utils";
 
 export const dynamic = "force-dynamic";
 
-export default async function CustomerDetailPage({
+export default async function CustomerWorkspacePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ bookingId?: string }>;
 }) {
   await requireUser();
   const { id } = await params;
-  const profile = await getCustomerProfile(id);
+  const { bookingId } = await searchParams;
 
-  if (!profile) {
+  const workspaceData = await getUnifiedCustomerWorkspaceData(id);
+  if (!workspaceData) {
     notFound();
   }
 
-  // Safely serialize BigInt fields
-  const serializedProfile = JSON.parse(
-    JSON.stringify(profile, (k, v) => (typeof v === "bigint" ? v.toString() : v))
-  );
+  // Guaranteed BigInt serialization for Next.js Client Component boundary
+  const serializedWorkspaceData = serializeBigInts(workspaceData);
 
-  return <CustomerDossierClient initialProfile={serializedProfile} />;
+  return (
+    <CustomerWorkspaceClient
+      initialData={serializedWorkspaceData}
+      initialBookingId={bookingId}
+    />
+  );
 }

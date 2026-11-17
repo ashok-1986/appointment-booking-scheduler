@@ -43,13 +43,16 @@ export async function POST(
       }
     }
 
-    await db.insert(messages).values({
+    const newMsg = {
       id: randomUUID(),
       bookingId: booking.id,
-      channel: "whatsapp",
-      direction: "outbound",
+      channel: "whatsapp" as const,
+      direction: "outbound" as const,
       content,
-    });
+      createdAt: new Date(),
+    };
+
+    await db.insert(messages).values(newMsg);
 
     if (booking.hubspotDealId && booking.client.hubspotContactId) {
       const { logMessage } = await import("@/lib/services/hubspot");
@@ -60,7 +63,7 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, data: newMsg });
   } catch (err) {
     return jsonError(err);
   }

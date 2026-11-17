@@ -59,6 +59,7 @@ type Stage =
 
 type Booking = {
   id: string;
+  clientId?: string;
   serviceType: string;
   stage: Stage;
   designDescription: string | null;
@@ -215,6 +216,13 @@ export default function BookingsClient({
   const [selectedStage, setSelectedStage] = useState<string>("all");
 
   const stageParam = searchParams.get("stage");
+  const errorParam = searchParams.get("error");
+
+  useEffect(() => {
+    if (errorParam === "booking_not_found") {
+      toast.error("The requested booking record was not found or has been archived.");
+    }
+  }, [errorParam]);
 
   useEffect(() => {
     if (stageParam && stageParam !== "all") {
@@ -707,7 +715,7 @@ export default function BookingsClient({
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <Link
-                            href={`/dashboard/bookings/${b.id}`}
+                            href={`/dashboard/customers/${b.client.id}?bookingId=${b.id}`}
                             className="font-heading font-cormorant text-2xl font-semibold text-foreground hover:text-primary transition-colors tracking-tight"
                           >
                             {b.client.name}
@@ -866,7 +874,7 @@ export default function BookingsClient({
                         </a>
                       )}
 
-                      <Link href={`/dashboard/bookings/${b.id}`}>
+                      <Link href={`/dashboard/customers/${b.client.id}?bookingId=${b.id}`}>
                         <Button
                           size="sm"
                           className="h-9 gap-1.5 bg-[#1A1A1A] hover:bg-black text-[#C4FF61] dark:bg-[#C4FF61] dark:hover:bg-[#C4FF61]/90 dark:text-[#1A1A1A] text-xs font-medium transition-all font-body"

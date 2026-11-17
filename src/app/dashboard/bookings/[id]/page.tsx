@@ -1,53 +1,47 @@
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth-utils";
-import { getBooking, listMessages, listPayments } from "@/lib/workflows";
-import BookingDetailClient from "./booking-detail-client";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
-import { serializeBigInts } from "@/lib/route-utils";
+import { db } from "@/lib/db";
+import { bookings } from "@/lib/schema";
+import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-export default async function BookingDetailPage({
+export default async function BookingRedirectPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await requireUser();
   const { id } = await params;
-  const booking = await getBooking(id);
+  const incomingParams = await searchParams;
 
+  // Lookup the booking's client ID
+  const booking = await db.query.bookings.findFirst({
+    where: eq(bookings.id, id),
+    columns: { id: true, clientId: true },
+  });
+
+  // Graceful error handling: redirect to bookings list with friendly toast rather than raw unstyled 404
   if (!booking) {
-    return (
-      <Card className="border-dashed">
-        <CardContent className="py-20 text-center font-body">
-          <p className="text-muted-foreground mb-4">Client booking not found or was removed.</p>
-          <Link href="/dashboard/bookings">
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="mr-2 size-4" /> Return to Bookings
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
-    );
+    redirect("/dashboard/bookings?error=booking_not_found");
   }
 
-  const [rawMessages, rawPayments] = await Promise.all([
-    listMessages(id),
-    listPayments(id),
-  ]);
+  // Preserve and forward all incoming query parameters (e.g. ?payment_status=success, ?source=email)
+  const query = new URLSearchParams();
+  query.set("bookingId", booking.id);
 
-  const initialBooking = serializeBigInts(booking);
-  const initialMessages = serializeBigInts(rawMessages);
-  const initialPayments = serializeBigInts(rawPayments);
+  for (const [key, val] of Object.entries(incomingParams)) {
+    if (key !== "bookingId" && val !== undefined) {
+      if (Array.isArray(val)) {
+        val.forEach((v) => query.append(key, v));
+      } else {
+        query.set(key, val);
+      }
+    }
+  }
 
-  return (
-    <BookingDetailClient
-      id={id}
-      initialBooking={initialBooking as any}
-      initialMessages={initialMessages as any}
-      initialPayments={initialPayments as any}
-    />
-  );
+  // Permanent server redirect to unified 3-column workspace with active project selected
+  redirect(`/dashboard/customers/${booking.clientId}?${query.toString()}`);
 }
