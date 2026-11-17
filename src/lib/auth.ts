@@ -13,7 +13,16 @@ const resolvedBaseUrl =
   process.env.NEXT_PUBLIC_APP_URL ||
   process.env.URL ||
   process.env.DEPLOY_PRIME_URL ||
-  "https://book.meetprerna.com";
+  "http://localhost:4000";
+
+let configuredHost: string | undefined;
+try {
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    configuredHost = new URL(process.env.NEXT_PUBLIC_APP_URL).host;
+  }
+} catch {
+  // invalid url, ignore
+}
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -31,14 +40,13 @@ export const auth = betterAuth({
   },
   baseURL: {
     allowedHosts: [
-      "book.meetprerna.com",
       "*.meetprerna.com",
       "meetprerna.com",
-      "bookmeetprerna.netlify.app",
       "*.netlify.app",
       "localhost:*",
       "127.0.0.1:*",
       "*.netlify.com",
+      ...(configuredHost ? [configuredHost] : []),
     ],
     fallback: resolvedBaseUrl,
   },
@@ -53,10 +61,8 @@ export const auth = betterAuth({
     "http://localhost:3000",
     "http://127.0.0.1:4000",
     "http://127.0.0.1:3000",
-    "https://book.meetprerna.com",
     "https://*.meetprerna.com",
     "https://meetprerna.com",
-    "https://bookmeetprerna.netlify.app",
     "https://*.netlify.app",
     "*.netlify.app",
     "https://*.netlify.com",
