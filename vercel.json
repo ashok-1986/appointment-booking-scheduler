@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/reminders",
+      "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/cron/link-expiry",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/follow-up",
+      "schedule": "30 4 * * *"
+    }
+  ]
+}

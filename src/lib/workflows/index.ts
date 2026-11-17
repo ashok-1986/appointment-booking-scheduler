@@ -657,6 +657,7 @@ export async function signConsentForm(
     .update(consentForms)
     .set({
       signedData,
+      formData: signedData,
       signedAt: now,
       ipAddress,
       userAgent,

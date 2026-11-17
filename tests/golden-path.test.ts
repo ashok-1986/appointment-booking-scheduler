@@ -30,14 +30,125 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
   const testClientEmail = `goldenpath_${testRunId}@meetprerna-test.com`;
   const testClientPhone = `+9198765${testRunId.slice(0, 5)}`;
   const testClientName = `GoldenPath Client ${testRunId}`;
-  const artistId = process.env.DEFAULT_ARTIST_ID || "QyKKghM0P0EeSRkGSXkHaROkcEpaNruM";
+  const artistId = process.env.TEST_ARTIST_ID || process.env.DEFAULT_ARTIST_ID;
 
   let dbAvailable = false;
   let createdClientId: string | undefined;
   let createdBookingId: string | undefined;
   let createdConsentId: string | undefined;
+  let originalFetch: typeof globalThis.fetch;
 
   beforeAll(async () => {
+    // 1. Enforce database isolation and test artist ID to prevent modifying production/shared data
+    const hasTestDbMarker =
+      process.env.TEST_DATABASE === "true" ||
+      Boolean(process.env.DATABASE_URL?.includes("test"));
+
+    if (!artistId || !hasTestDbMarker) {
+      console.warn(
+        "Golden path test skipped: An explicit test artist ID (TEST_ARTIST_ID or DEFAULT_ARTIST_ID) and test-database marker (TEST_DATABASE=true or 'test' in DATABASE_URL) must be configured."
+      );
+      dbAvailable = false;
+      return;
+    }
+
+    // 2. Ensure mock credentials for external services during test execution
+    process.env.GOOGLE_CLIENT_ID ||= "mock_google_client_id";
+    process.env.GOOGLE_CLIENT_SECRET ||= "mock_google_client_secret";
+    process.env.GOOGLE_REFRESH_TOKEN ||= "mock_google_refresh_token";
+    process.env.RAZORPAY_KEY_ID ||= "mock_rzp_key";
+    process.env.RAZORPAY_KEY_SECRET ||= "mock_rzp_secret";
+    process.env.RESEND_API_KEY ||= "mock_resend_key";
+    process.env.WHATSAPP_ACCESS_TOKEN ||= "mock_wa_token";
+    process.env.WHATSAPP_PHONE_NUMBER_ID ||= "mock_wa_phone_id";
+
+    // 3. Stub external service HTTP calls to prevent sending real notifications or hitting external APIs
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const urlStr =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      // Stub Razorpay payment links
+      if (urlStr.includes("api.razorpay.com/v1/payment_links")) {
+        return new Response(
+          JSON.stringify({
+            id: "plink_test_mock_12345",
+            short_url: "https://rzp.io/i/test_mock_12345",
+            long_url: "https://api.razorpay.com/payment_links/plink_test_mock_12345",
+            status: "created",
+            amount: 500000,
+            currency: "INR",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Stub Google OAuth token exchange
+      if (urlStr.includes("oauth2.googleapis.com/token")) {
+        return new Response(
+          JSON.stringify({
+            access_token: "mock_google_access_token",
+            expires_in: 3600,
+            token_type: "Bearer",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Stub Google Calendar event creation
+      if (urlStr.includes("googleapis.com/calendar/v3")) {
+        return new Response(
+          JSON.stringify({
+            id: "mock_gcal_event_12345",
+            htmlLink: "https://calendar.google.com/event?eid=mock123",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Stub Resend email delivery
+      if (urlStr.includes("api.resend.com")) {
+        return new Response(
+          JSON.stringify({
+            id: "mock_email_123",
+            from: "booking@example.com",
+            to: ["test@example.com"],
+            created_at: new Date().toISOString(),
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Stub WhatsApp Cloud API
+      if (urlStr.includes("graph.facebook.com")) {
+        return new Response(
+          JSON.stringify({
+            messaging_product: "whatsapp",
+            contacts: [{ input: "919876500000", wa_id: "919876500000" }],
+            messages: [{ id: "wamid_mock_123" }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      // Stub HubSpot API
+      if (urlStr.includes("api.hubapi.com")) {
+        return new Response(
+          JSON.stringify({
+            id: "mock_hubspot_id_123",
+            properties: {},
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      return originalFetch(input, init);
+    }) as typeof globalThis.fetch;
+
     try {
       await db.execute(sql`SELECT 1`);
       dbAvailable = true;
@@ -47,18 +158,84 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
   });
 
   afterAll(async () => {
-    if (!dbAvailable) return;
-    // Clean up test entities in foreign key dependency order
-    if (createdBookingId) {
-      await db.delete(auditLogs).where(eq(auditLogs.bookingId, createdBookingId));
-      await db.delete(messages).where(eq(messages.bookingId, createdBookingId));
-      await db.delete(consentForms).where(eq(consentForms.bookingId, createdBookingId));
-      await db.delete(payments).where(eq(payments.bookingId, createdBookingId));
-      await db.delete(bookingSessions).where(eq(bookingSessions.bookingId, createdBookingId));
-      await db.delete(bookings).where(eq(bookings.id, createdBookingId));
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
     }
-    if (createdClientId) {
-      await db.delete(clients).where(eq(clients.id, createdClientId));
+
+    if (!dbAvailable) return;
+
+    // Resolve client ID and booking ID even if an assertion failed before variables were assigned
+    let clientIdToDelete = createdClientId;
+    let bookingIdToDelete = createdBookingId;
+
+    try {
+      if (!clientIdToDelete) {
+        const [foundClient] = await db
+          .select({ id: clients.id })
+          .from(clients)
+          .where(eq(clients.email, testClientEmail));
+        if (foundClient) {
+          clientIdToDelete = foundClient.id;
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to lookup client by email during cleanup", e);
+    }
+
+    try {
+      if (!bookingIdToDelete && clientIdToDelete) {
+        const [foundBooking] = await db
+          .select({ id: bookings.id })
+          .from(bookings)
+          .where(eq(bookings.clientId, clientIdToDelete));
+        if (foundBooking) {
+          bookingIdToDelete = foundBooking.id;
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to lookup booking by client ID during cleanup", e);
+    }
+
+    // Clean up test entities in foreign key dependency order, attempting each deletion even if another throws
+    if (bookingIdToDelete) {
+      try {
+        await db.delete(auditLogs).where(eq(auditLogs.bookingId, bookingIdToDelete));
+      } catch (e) {
+        console.warn("Cleanup error (auditLogs):", e);
+      }
+      try {
+        await db.delete(messages).where(eq(messages.bookingId, bookingIdToDelete));
+      } catch (e) {
+        console.warn("Cleanup error (messages):", e);
+      }
+      try {
+        await db.delete(consentForms).where(eq(consentForms.bookingId, bookingIdToDelete));
+      } catch (e) {
+        console.warn("Cleanup error (consentForms):", e);
+      }
+      try {
+        await db.delete(payments).where(eq(payments.bookingId, bookingIdToDelete));
+      } catch (e) {
+        console.warn("Cleanup error (payments):", e);
+      }
+      try {
+        await db.delete(bookingSessions).where(eq(bookingSessions.bookingId, bookingIdToDelete));
+      } catch (e) {
+        console.warn("Cleanup error (bookingSessions):", e);
+      }
+      try {
+        await db.delete(bookings).where(eq(bookings.id, bookingIdToDelete));
+      } catch (e) {
+        console.warn("Cleanup error (bookings):", e);
+      }
+    }
+
+    if (clientIdToDelete) {
+      try {
+        await db.delete(clients).where(eq(clients.id, clientIdToDelete));
+      } catch (e) {
+        console.warn("Cleanup error (clients):", e);
+      }
     }
   });
 
@@ -66,7 +243,7 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
   // STEP 1: Prospective Collector Submits Enquiry via Public Form
   // =========================================================================
   it("Step 1: Should ingest new client enquiry and initialize CRM records", async () => {
-    if (!dbAvailable) {
+    if (!dbAvailable || !artistId) {
       expect(true).toBe(true);
       return;
     }
@@ -79,7 +256,7 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
         city: "Mumbai",
         dateOfBirth: "1998-04-12",
         gender: "Female",
-        tattooTimeline: "Within 1–2 Months",
+        tattooTimeline: "Within 1-2 Months",
         instagramHandle: "@goldenpath_collector",
         message: "Fine-line botanical sleeve with delicate stippling",
         designDescription: "Botanical orchid branch wrapping inner forearm",
@@ -128,13 +305,13 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
   // STEP 2: Artist Reviews & Schedules Consultation
   // =========================================================================
   it("Step 2: Should schedule consultation session and qualify prospective client", async () => {
-    if (!dbAvailable) {
+    if (!dbAvailable || !artistId) {
       expect(true).toBe(true);
       return;
     }
     expect(createdBookingId).toBeDefined();
 
-    // 2a. Prerna schedules a 30-min Consultation meeting on the calendar
+    // 2a. Prerna schedules a 30-min Consultation meeting on the calendar (Session 1)
     const consultationStart = new Date(Date.now() + 86400000 * 2); // 2 days later
     const consultationEnd = new Date(consultationStart.getTime() + 30 * 60000);
 
@@ -153,6 +330,7 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
       .returning();
 
     expect(session).toBeDefined();
+    expect(session.sessionNumber).toBe(1);
     expect(session.notes).toContain("[Consultation]");
     expect(session.durationMinutes).toBe(30);
 
@@ -179,7 +357,7 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
   // STEP 3: Deposit Payment Request & Simulated Razorpay Settlement
   // =========================================================================
   it("Step 3: Should issue deposit payment link and settle via Razorpay webhook", async () => {
-    if (!dbAvailable) {
+    if (!dbAvailable || !artistId) {
       expect(true).toBe(true);
       return;
     }
@@ -187,34 +365,14 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
 
     const depositAmountPaise = 500000; // ₹5,000
 
-    // 3a. Generate Deposit Payment Link
-    let paymentLinkCreated = false;
-    try {
-      const linkResult = await createDepositPaymentLink(
-        createdBookingId!,
-        depositAmountPaise,
-        artistId
-      );
-      paymentLinkCreated = linkResult.ok;
-    } catch {
-      // In sandbox/offline mode without live Razorpay creds, simulate local payment insertion
-      const mockPaymentId = crypto.randomUUID();
-      await db.insert(payments).values({
-        id: mockPaymentId,
-        bookingId: createdBookingId!,
-        type: "deposit",
-        amount: BigInt(depositAmountPaise),
-        status: "created",
-        providerRef: "plink_test_mock_12345",
-      });
-      await db
-        .update(bookings)
-        .set({ stage: "deposit_pending", depositAmount: BigInt(depositAmountPaise) })
-        .where(eq(bookings.id, createdBookingId!));
-      paymentLinkCreated = true;
-    }
+    // 3a. Generate Deposit Payment Link directly via workflow (without try/catch fallback)
+    const linkResult = await createDepositPaymentLink(
+      createdBookingId!,
+      depositAmountPaise,
+      artistId
+    );
 
-    expect(paymentLinkCreated).toBe(true);
+    expect(linkResult.ok).toBe(true);
 
     const [depositPendingBooking] = await db
       .select()
@@ -281,7 +439,7 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
   // STEP 4: Schedule Core In-Studio Tattoo Session
   // =========================================================================
   it("Step 4: Should lock appointment slot on studio calendar and transition to scheduled", async () => {
-    if (!dbAvailable) {
+    if (!dbAvailable || !artistId) {
       expect(true).toBe(true);
       return;
     }
@@ -290,28 +448,31 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
     const sessionStart = new Date(Date.now() + 86400000 * 7); // 7 days later
     const sessionEnd = new Date(sessionStart.getTime() + 180 * 60000); // 3-hour session
 
-    let sessionConfirmed = false;
-    try {
-      const confirmResult = await confirmSessionDate(
-        createdBookingId!,
-        { start: sessionStart, end: sessionEnd },
-        artistId
-      );
-      sessionConfirmed = confirmResult.ok;
-    } catch {
-      // Offline fallback: update booking directly to scheduled
-      await db
-        .update(bookings)
-        .set({
-          stage: "scheduled",
-          sessionDate: sessionStart,
-          sessionDuration: 180,
-        })
-        .where(eq(bookings.id, createdBookingId!));
-      sessionConfirmed = true;
-    }
+    // 4a. Call confirmSessionDate directly without try/catch fallback
+    const confirmResult = await confirmSessionDate(
+      createdBookingId!,
+      { start: sessionStart, end: sessionEnd },
+      artistId
+    );
+    expect(confirmResult.ok).toBe(true);
 
-    expect(sessionConfirmed).toBe(true);
+    // 4b. Insert scheduled core tattoo session with sequential sessionNumber 2 to avoid collision with consultation session 1
+    const [tattooSession] = await db
+      .insert(bookingSessions)
+      .values({
+        id: crypto.randomUUID(),
+        bookingId: createdBookingId!,
+        sessionNumber: 2,
+        scheduledStart: sessionStart,
+        scheduledEnd: sessionEnd,
+        durationMinutes: 180,
+        status: "scheduled",
+        notes: "[Tattoo Session #1] Botanical forearm piece",
+      })
+      .returning();
+
+    expect(tattooSession).toBeDefined();
+    expect(tattooSession.sessionNumber).toBe(2);
 
     const [scheduledBooking] = await db
       .select()
@@ -327,7 +488,7 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
   // STEP 5: Digital Tattoo Consent & Health Disclosures Workflow
   // =========================================================================
   it("Step 5: Should initialize, review, and digitally sign legal consent waiver", async () => {
-    if (!dbAvailable) {
+    if (!dbAvailable || !artistId) {
       expect(true).toBe(true);
       return;
     }
@@ -365,7 +526,7 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
 
     expect(signResult.ok).toBe(true);
 
-    // Verify Consent Record in DB
+    // Verify Consent Record in DB with strengthened assertions
     const [consent] = await db
       .select()
       .from(consentForms)
@@ -373,14 +534,22 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
 
     expect(consent).toBeDefined();
     expect(consent.signedAt).not.toBeNull();
-    expect(consent.formData).toBeDefined();
+    expect(consent.formData).not.toBeNull();
+
+    const parsedFormData =
+      typeof consent.formData === "string"
+        ? (JSON.parse(consent.formData) as Record<string, unknown>)
+        : (consent.formData as Record<string, unknown> | null);
+
+    expect(parsedFormData).toBeDefined();
+    expect(parsedFormData?.legalName).toBe(testClientName);
   }, 15000);
 
   // =========================================================================
   // STEP 6: Tattoo Session Completion & Lifecycle Closure
   // =========================================================================
   it("Step 6: Should mark tattoo session complete and close booking lifecycle", async () => {
-    if (!dbAvailable) {
+    if (!dbAvailable || !artistId) {
       expect(true).toBe(true);
       return;
     }
@@ -390,6 +559,12 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
     const completionResult = await markSessionComplete(createdBookingId!, 180, artistId);
     expect(completionResult.ok).toBe(true);
 
+    // 6b. Update scheduled tattoo session status to completed
+    await db
+      .update(bookingSessions)
+      .set({ status: "completed" })
+      .where(eq(bookingSessions.bookingId, createdBookingId!));
+
     const [completedBooking] = await db
       .select()
       .from(bookings)
@@ -398,7 +573,7 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
     expect(completedBooking.stage).toBe("session_complete");
     expect(normalizeToV1Stage(completedBooking.stage)).toBe("session_completed");
 
-    // 6b. Verify Complete Chronological Audit Trail
+    // 6c. Verify Complete Chronological Audit Trail
     const finalAuditTrail = await db
       .select()
       .from(auditLogs)
@@ -414,4 +589,3 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
     expect(actions).toContain("session.completed");
   }, 15000);
 });
-

@@ -16,7 +16,7 @@ export default async function DashboardLayout({
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-6">
-            <Link href="/dashboard/bookings" className="flex items-center gap-3">
+            <Link href="/dashboard" className="flex items-center gap-3">
               <div className="relative h-9 w-28 sm:w-36">
                 <Image
                   src="/meetprerna_logo.png"
@@ -33,8 +33,14 @@ export default async function DashboardLayout({
 
             <nav className="flex items-center gap-1 sm:gap-4 text-sm font-medium">
               <Link
-                href="/dashboard/bookings"
+                href="/dashboard"
                 className="text-foreground transition-colors hover:text-foreground/80 px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                Overview
+              </Link>
+              <Link
+                href="/dashboard/bookings"
+                className="text-muted-foreground transition-colors hover:text-foreground px-2 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800"
               >
                 Bookings
               </Link>
