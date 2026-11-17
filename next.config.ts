@@ -17,11 +17,9 @@ const nextConfig: NextConfig = {
     ],
   },
   allowedDevOrigins: ['*'],
+  serverExternalPackages: ["pg", "pg-connection-string", "pgpass"],
   typescript: {
     ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
   turbopack: {
     rules: {

@@ -38,7 +38,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { CATEGORY_META, type MediaCategory, type MediaAssetWithDetails } from "@/lib/gallery";
+import { CATEGORY_META, type MediaCategory, type MediaAssetWithDetails } from "@/lib/gallery-types";
 import { toast } from "sonner";
 
 type ClientItem = {
