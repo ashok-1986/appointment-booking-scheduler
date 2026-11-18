@@ -6,7 +6,7 @@ import {
   clients,
   bookingSessions,
   payments,
-  consentForms,
+  consentRecords,
   messages,
   auditLogs,
 } from "@/lib/schema";
@@ -209,9 +209,9 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
         console.warn("Cleanup error (messages):", e);
       }
       try {
-        await db.delete(consentForms).where(eq(consentForms.bookingId, bookingIdToDelete));
+        await db.delete(consentRecords).where(eq(consentRecords.bookingId, bookingIdToDelete));
       } catch (e) {
-        console.warn("Cleanup error (consentForms):", e);
+        console.warn("Cleanup error (consentRecords):", e);
       }
       try {
         await db.delete(payments).where(eq(payments.bookingId, bookingIdToDelete));
@@ -529,20 +529,13 @@ describe("End-to-End Golden Path: MeetPrerna Client Lifecycle", () => {
     // Verify Consent Record in DB with strengthened assertions
     const [consent] = await db
       .select()
-      .from(consentForms)
-      .where(eq(consentForms.id, createdConsentId!));
+      .from(consentRecords)
+      .where(eq(consentRecords.id, createdConsentId!));
 
     expect(consent).toBeDefined();
     expect(consent.signedAt).not.toBeNull();
-    expect(consent.formData).not.toBeNull();
-
-    const parsedFormData =
-      typeof consent.formData === "string"
-        ? (JSON.parse(consent.formData) as Record<string, unknown>)
-        : (consent.formData as Record<string, unknown> | null);
-
-    expect(parsedFormData).toBeDefined();
-    expect(parsedFormData?.legalName).toBe(testClientName);
+    expect(consent.status).toBe("signed");
+    expect(consent.legalName).toBe(testClientName);
   }, 15000);
 
   // =========================================================================

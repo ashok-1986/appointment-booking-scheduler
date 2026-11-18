@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { integrationLogs } from "@/lib/schema";
 import { desc, eq } from "drizzle-orm";
+import { getSessionUser } from "@/lib/auth-utils";
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await getSessionUser(req.headers);
+    if (!user) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const url = new URL(req.url);
     const statusFilter = url.searchParams.get("status");
 

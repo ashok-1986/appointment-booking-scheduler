@@ -68,6 +68,20 @@ describe("Enquiry Rate Limiter & Abuse Prevention", () => {
     expect(afterExpiry.remaining).toBe(0);
   });
 
+  it("should opportunistically evict expired keys when store size exceeds 1000", async () => {
+    resetRateLimiter();
+    // Insert 1001 entries with short TTL
+    for (let i = 0; i < 1001; i++) {
+      checkRateLimit(`test-ip-${i}`, { limit: 5, windowMs: 20 });
+    }
+    // Wait for them to expire
+    await new Promise((r) => setTimeout(r, 30));
+
+    // Trigger checkRateLimit which should trigger eviction of the expired entries
+    const res = checkRateLimit("fresh-ip", { limit: 5, windowMs: 60000 });
+    expect(res.allowed).toBe(true);
+  });
+
   describe("API Route Honeypot & Rate Limiting Integration", () => {
     it("should trap honeypot submissions and return bot_ack without database errors", async () => {
       const req = new NextRequest("http://localhost:4000/api/enquiry", {

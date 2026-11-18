@@ -1,5 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { formatIntegrationLog } from "@/lib/services/integration-logger";
+import { GET } from "@/app/api/dashboard/integrations/route";
+import { NextRequest } from "next/server";
 
 describe("Integration Failure Visibility Service", () => {
   it("should structure successful integration execution records", () => {
@@ -59,5 +61,14 @@ describe("Integration Failure Visibility Service", () => {
     expect(record.bookingId).toBeNull();
     expect(record.payload).toBeNull();
     expect(record.errorMessage).toBeNull();
+  });
+
+  it("should reject unauthenticated requests to the dashboard route with 401", async () => {
+    const req = new NextRequest("http://localhost:4000/api/dashboard/integrations");
+    const res = await GET(req);
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe("Unauthorized");
   });
 });

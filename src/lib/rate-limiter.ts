@@ -25,6 +25,16 @@ export function checkRateLimit(
   options: { limit: number; windowMs: number } = { limit: 5, windowMs: 60000 }
 ): { allowed: boolean; remaining: number; resetTime: number } {
   const now = Date.now();
+
+  // Opportunistic cleanup of expired keys when store size exceeds threshold
+  if (rateLimitStore.size > 1000) {
+    for (const [key, val] of rateLimitStore.entries()) {
+      if (now > val.resetAt) {
+        rateLimitStore.delete(key);
+      }
+    }
+  }
+
   const record = rateLimitStore.get(identifier);
 
   if (!record || now > record.resetAt) {

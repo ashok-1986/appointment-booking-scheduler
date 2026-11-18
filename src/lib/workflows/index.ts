@@ -1149,9 +1149,33 @@ export async function signConsentForm(
     ? signedData.ageConfirmed
     : true;
 
-  await db
-    .update(consentRecords)
-    .set({
+  const existingConsentRecord = await db.query.consentRecords.findFirst({
+    where: eq(consentRecords.bookingId, bookingId),
+  });
+
+  if (existingConsentRecord) {
+    await db
+      .update(consentRecords)
+      .set({
+        status: "signed",
+        signedAt: now,
+        legalName,
+        dateOfBirth,
+        ageVerified,
+        procedureConsent,
+        photographyConsent,
+        marketingConsent,
+        healthDisclosures,
+        signatureImageUrl,
+        signerIp: ipAddress,
+        signerUserAgent: userAgent,
+      })
+      .where(eq(consentRecords.bookingId, bookingId));
+  } else {
+    await db.insert(consentRecords).values({
+      id: randomUUID(),
+      bookingId,
+      clientId: booking.clientId,
       status: "signed",
       signedAt: now,
       legalName,
@@ -1164,8 +1188,8 @@ export async function signConsentForm(
       signatureImageUrl,
       signerIp: ipAddress,
       signerUserAgent: userAgent,
-    })
-    .where(eq(consentRecords.bookingId, bookingId));
+    });
+  }
 
   await db
     .update(bookings)
