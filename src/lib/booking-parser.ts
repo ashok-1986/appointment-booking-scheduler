@@ -4,6 +4,7 @@ export type ParsedIntake = {
   city?: string;
   gender?: string;
   dob?: string;
+  placement?: string;
   notes?: string;
   design?: string;
   rawText: string;
@@ -36,6 +37,9 @@ export function parseBookingDetails(text: string | null | undefined): ParsedInta
 
   const dobMatch = rawText.match(/^DOB:\s*(.+)$/m);
   if (dobMatch) result.dob = dobMatch[1].trim();
+
+  const placementMatch = rawText.match(/^Placement:\s*(.+)$/m);
+  if (placementMatch) result.placement = placementMatch[1].trim();
 
   const notesMatch = rawText.match(/^Notes:\s*([\s\S]*?)(?=\n\n(?:Design:|$)|$)/m);
   if (notesMatch) result.notes = notesMatch[1].trim();

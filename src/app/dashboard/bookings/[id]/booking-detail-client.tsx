@@ -54,6 +54,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { parseBookingDetails, formatPaise } from "@/lib/booking-parser";
+import {
+  buildPersonalizedWhatsAppUrl,
+  buildPersonalizedWhatsAppMessage,
+  normalizePhoneForWhatsApp,
+  WHATSAPP_STAGE_TEMPLATES,
+  applyWhatsAppTemplate,
+} from "@/lib/services/whatsapp-composer";
 
 type Stage =
   | "enquiry"
@@ -73,6 +80,7 @@ type Booking = {
   id: string;
   serviceType: string;
   stage: Stage;
+  placement?: string | null;
   designDescription: string | null;
   referenceImages?: string[] | null;
   sessionDate: string | null;
@@ -229,6 +237,44 @@ export default function BookingDetailClient({
     return parseBookingDetails(booking?.designDescription);
   }, [booking?.designDescription]);
 
+  const defaultStageMessage = useMemo(() => {
+    if (!booking) return "";
+    return buildPersonalizedWhatsAppMessage({
+      phone: booking.client.phone,
+      name: booking.client.name,
+      stage: booking.stage,
+      serviceType: booking.serviceType,
+      placement: booking.placement || intake.placement,
+    });
+  }, [booking, intake]);
+
+  const dispatchWaUrl = useMemo(() => {
+    if (!booking) return "";
+    const clean = normalizePhoneForWhatsApp(booking.client.phone);
+    if (!clean) return "";
+    const trimmed = waMessage.trim();
+    if (!trimmed) {
+      return buildPersonalizedWhatsAppUrl({
+        phone: booking.client.phone,
+        name: booking.client.name,
+        stage: booking.stage,
+        serviceType: booking.serviceType,
+        placement: booking.placement || intake.placement,
+      });
+    }
+    if (trimmed.startsWith("Hi ") || trimmed.startsWith("Hello ") || trimmed.startsWith("Hey ")) {
+      return `https://wa.me/${clean}?text=${encodeURIComponent(trimmed)}`;
+    }
+    return buildPersonalizedWhatsAppUrl({
+      phone: booking.client.phone,
+      name: booking.client.name,
+      stage: booking.stage,
+      serviceType: booking.serviceType,
+      placement: booking.placement || intake.placement,
+      customNote: trimmed,
+    });
+  }, [booking, intake, waMessage]);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-32 space-y-3 font-body">
@@ -258,12 +304,14 @@ export default function BookingDetailClient({
   const currentStepIndex = STAGE_STEPS.findIndex((s) => s.stage === booking.stage);
   const isNotAFit = booking.stage === "not_a_fit";
 
-  const cleanPhone = booking.client.phone.replace(/[^0-9]/g, "");
-  const waUrl = cleanPhone
-    ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-        `Hi ${booking.client.name}, this is Prerna from Meet Prerna Tattoo Studio.`
-      )}`
-    : null;
+  const cleanPhone = normalizePhoneForWhatsApp(booking.client.phone);
+  const waUrl = buildPersonalizedWhatsAppUrl({
+    phone: booking.client.phone,
+    name: booking.client.name,
+    stage: booking.stage,
+    serviceType: booking.serviceType,
+    placement: booking.placement || intake.placement,
+  }) || null;
 
   return (
     <div className="space-y-8 font-body">
@@ -887,8 +935,56 @@ export default function BookingDetailClient({
                     To: {booking.client.phone}
                   </span>
                 </div>
+
+                {/* Template Chips & Load Stage Default */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <span className="text-[10px] font-medium text-muted-foreground mr-0.5">
+                    Templates:
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setWaMessage(defaultStageMessage)}
+                    className="h-6 px-2 text-[10px] font-medium rounded-full border-[#C4FF61]/50 bg-[#C4FF61]/10 text-emerald-800 dark:text-[#C4FF61] hover:bg-[#C4FF61]/20 transition-colors"
+                    title="Load stage-specific default message"
+                  >
+                    <Sparkles className="mr-1 size-2.5 text-emerald-600 dark:text-[#C4FF61]" />
+                    Load Stage Default
+                  </Button>
+                  {WHATSAPP_STAGE_TEMPLATES.map((tmpl) => (
+                    <Button
+                      key={tmpl.stage}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setWaMessage(applyWhatsAppTemplate(tmpl.text, booking.client.name))
+                      }
+                      className={`h-6 px-2 text-[10px] font-medium rounded-full transition-colors ${
+                        booking.stage === tmpl.stage
+                          ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-semibold"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {tmpl.label}
+                    </Button>
+                  ))}
+                  {waMessage && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setWaMessage("")}
+                      className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-destructive"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+
                 <Textarea
-                  placeholder={`Write a direct WhatsApp message to ${booking.client.name}…`}
+                  placeholder={`Write a direct WhatsApp message to ${booking.client.name} (or leave empty to send stage default)…`}
                   value={waMessage}
                   onChange={(e) => setWaMessage(e.target.value)}
                   rows={2}
@@ -896,11 +992,9 @@ export default function BookingDetailClient({
                 />
 
                 <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                  {cleanPhone && (
+                  {dispatchWaUrl && (
                     <a
-                      href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-                        waMessage.trim() || `Hi ${booking.client.name}, this is Prerna from Meet Prerna Tattoo Studio.`
-                      )}`}
+                      href={dispatchWaUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#25D366] hover:bg-[#20bd5a] px-3 text-xs font-semibold text-white shadow-xs transition-colors"
@@ -915,10 +1009,11 @@ export default function BookingDetailClient({
                     variant="outline"
                     onClick={() =>
                       callAction("wa-log", async () => {
+                        const messageToSend = waMessage.trim() || defaultStageMessage;
                         const res = await fetch(`/api/bookings/${id}/whatsapp`, {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ message: waMessage, logOnly: true }),
+                          body: JSON.stringify({ message: messageToSend, logOnly: true }),
                         });
                         const data = await res.json();
                         if (res.ok) {
@@ -928,7 +1023,7 @@ export default function BookingDetailClient({
                         return data;
                       })
                     }
-                    disabled={actionPending === "wa-log" || !waMessage.trim()}
+                    disabled={actionPending === "wa-log" || (!waMessage.trim() && !defaultStageMessage)}
                     className="text-xs h-9 font-medium"
                     title="Record this message into the client's timeline history"
                   >
@@ -943,17 +1038,18 @@ export default function BookingDetailClient({
                   <Button
                     onClick={() =>
                       callAction("wa", async () => {
+                        const messageToSend = waMessage.trim() || defaultStageMessage;
                         const res = await fetch(`/api/bookings/${id}/whatsapp`, {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ message: waMessage }),
+                          body: JSON.stringify({ message: messageToSend }),
                         });
                         const data = await res.json();
                         if (res.ok) setWaMessage("");
                         return data;
                       })
                     }
-                    disabled={actionPending === "wa" || !waMessage.trim()}
+                    disabled={actionPending === "wa" || (!waMessage.trim() && !defaultStageMessage)}
                     className="bg-[#1A1A1A] hover:bg-black text-[#C4FF61] dark:bg-[#C4FF61] dark:text-[#1A1A1A] text-xs h-9 font-medium"
                     title="Send automatically using Meta WhatsApp Cloud API"
                   >

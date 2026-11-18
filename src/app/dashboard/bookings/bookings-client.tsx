@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { parseBookingDetails, formatPaise } from "@/lib/booking-parser";
+import { buildPersonalizedWhatsAppUrl } from "@/lib/services/whatsapp-composer";
 
 type Stage =
   | "enquiry"
@@ -62,6 +63,7 @@ type Booking = {
   clientId?: string;
   serviceType: string;
   stage: Stage;
+  placement?: string | null;
   designDescription: string | null;
   referenceImages?: string[] | null;
   sessionDate: string | null;
@@ -693,12 +695,13 @@ export default function BookingsClient({
             }
 
             // WhatsApp link helper
-            const cleanPhone = b.client.phone.replace(/[^0-9]/g, "");
-            const waUrl = cleanPhone
-              ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-                  `Hi ${b.client.name}, this is Prerna from Meet Prerna Tattoo Studio regarding your enquiry!`
-                )}`
-              : null;
+            const waUrl = buildPersonalizedWhatsAppUrl({
+              phone: b.client.phone,
+              name: b.client.name,
+              stage: b.stage,
+              serviceType: b.serviceType,
+              placement: b.placement || intake.placement,
+            }) || null;
 
             return (
               <Card
