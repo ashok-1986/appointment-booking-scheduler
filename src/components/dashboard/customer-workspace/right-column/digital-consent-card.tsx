@@ -16,6 +16,8 @@ export function DigitalConsentCard({
 }) {
   const latestConsent = consentRecords[0] || null;
   const isSigned = latestConsent != null;
+  const idProofType =
+    latestConsent?.healthDisclosures?.idProofType || latestConsent?.idProofType;
 
   return (
     <div className="rounded-xl border border-border/70 bg-card p-4 shadow-xs font-body">
@@ -51,14 +53,20 @@ export function DigitalConsentCard({
 
             <div className="text-[11px] text-muted-foreground space-y-0.5">
               <p>• Age Verification: 18+ Confirmed</p>
+              {idProofType && (
+                <p className="text-emerald-700 dark:text-emerald-400 font-medium">
+                  • ID Proof: {idProofType} On File
+                </p>
+              )}
               <p>• Medical Disclosures: Reviewed & Cleared</p>
-              <p>• Marketing & Photo Consent: {latestConsent.consentMarketing ? "Granted" : "Withheld"}</p>
+              <p>• Marketing & Photo Consent: {latestConsent.consentMarketing || latestConsent.marketingConsent ? "Granted" : "Withheld"}</p>
             </div>
 
-            {latestConsent.signatureDataUrl && (
+            {(latestConsent.signatureImageUrl || latestConsent.signatureDataUrl) && (
               <div className="mt-2 rounded bg-background p-1 border border-border/40 text-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={latestConsent.signatureDataUrl}
+                  src={latestConsent.signatureImageUrl || latestConsent.signatureDataUrl}
                   alt="Client Signature"
                   className="mx-auto max-h-12 object-contain dark:invert"
                 />

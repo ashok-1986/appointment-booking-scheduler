@@ -419,6 +419,9 @@ export const consentRecords = pgTable(
       skinConditionsDetails?: string;
       pregnantOrNursing?: boolean;
       cardiacOrEpileptic?: boolean;
+      idProofType?: string;
+      idProofImageUrl?: string;
+      idProofNumber?: string;
     }>().notNull(),
     procedureConsent: boolean("procedure_consent").notNull(),
     photographyConsent: boolean("photography_consent").notNull(),

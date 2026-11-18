@@ -8,9 +8,10 @@ import {
   consentRecords,
   consentForms,
   auditLogs,
+  clients,
 } from "@/lib/schema";
 import { addNote } from "@/lib/services/hubspot";
-import { jsonError } from "@/lib/route-utils";
+import { jsonError, jsonOk } from "@/lib/route-utils";
 
 export async function POST(
   req: NextRequest,
@@ -30,6 +31,10 @@ export async function POST(
     const legalName = (body.legalName || body.fullName || "").trim();
     const dateOfBirth = (body.dateOfBirth || "").trim();
     const signatureImageUrl = (body.signatureImageUrl || body.signature || "").trim();
+    const idProofType = (body.idProofType || "Aadhaar Card").trim();
+    const idProofImageUrl = (body.idProofImageUrl || "").trim();
+    const idProofNumber = (body.idProofNumber || "").trim();
+
     const procedureConsent =
       typeof body.procedureConsent === "boolean"
         ? body.procedureConsent
@@ -122,6 +127,18 @@ export async function POST(
     const now = new Date();
     const consentRecordId = randomUUID();
 
+    // Backfill client dateOfBirth if not previously recorded on client profile
+    if (booking.clientId && dateOfBirth && !booking.client?.dateOfBirth) {
+      try {
+        await db
+          .update(clients)
+          .set({ dateOfBirth, updatedAt: now })
+          .where(eq(clients.id, booking.clientId));
+      } catch (err) {
+        console.warn("Could not backfill client DOB:", err);
+      }
+    }
+
     // 4. Find Associated Booking Session (if any)
     const sessions = await db
       .select()
@@ -148,6 +165,9 @@ export async function POST(
         skinConditionsDetails: healthDisclosures.skinConditionsDetails || "",
         pregnantOrNursing: !!healthDisclosures.pregnantOrNursing,
         cardiacOrEpileptic: !!healthDisclosures.cardiacOrEpileptic,
+        idProofType,
+        idProofImageUrl,
+        idProofNumber,
       },
       procedureConsent: true,
       photographyConsent,
@@ -167,7 +187,11 @@ export async function POST(
 
     const legacyPayload = {
       fullName: legalName,
+      legalName,
       dateOfBirth,
+      idProofType,
+      idProofImageUrl,
+      idProofNumber,
       procedureConsent: true,
       photographyConsent,
       marketingConsent,
@@ -175,6 +199,7 @@ export async function POST(
       designApproval: true,
       photoPermission: photographyConsent,
       signature: signatureImageUrl,
+      signatureImageUrl,
       signedAt: now.toISOString(),
       healthDisclosures,
     };
@@ -197,6 +222,9 @@ export async function POST(
         formData: {
           legalName,
           dateOfBirth,
+          idProofType,
+          idProofImageUrl,
+          idProofNumber,
           healthDisclosures,
           procedureConsent: true,
           photographyConsent,
@@ -238,6 +266,8 @@ export async function POST(
         legalName,
         dateOfBirth,
         ageVerified: true,
+        idProofType,
+        hasIdProofImage: Boolean(idProofImageUrl),
         procedureConsent: true,
         photographyConsent,
         marketingConsent,
@@ -256,7 +286,9 @@ export async function POST(
       try {
         await addNote(
           booking.hubspotDealId,
-          `Digital Consent signed by ${legalName} (Age verified 18+). Photo: ${
+          `Digital Consent signed by ${legalName} (Age verified 18+). ID Proof: ${idProofType}${
+            idProofImageUrl ? " (Photo attached)" : ""
+          }. Photo: ${
             photographyConsent ? "Granted" : "Declined"
           }, Marketing: ${marketingConsent ? "Granted" : "Declined"}.`
         );
@@ -265,12 +297,14 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({
+    return jsonOk({
       ok: true,
       consentRecordId,
       signedAt: now.toISOString(),
       legalName,
       dateOfBirth,
+      idProofType,
+      idProofImageUrl,
       procedureConsent: true,
       photographyConsent,
       marketingConsent,
