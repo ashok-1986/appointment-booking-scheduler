@@ -1,70 +1,109 @@
 "use client";
 
-import { useState } from "react";
-import { MessageSquare, ExternalLink, Send, Loader2, BookmarkCheck } from "lucide-react";
+import { useState, useMemo } from "react";
+import { MessageSquare, ExternalLink, Send, Loader2, BookmarkCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-
-const TEMPLATES = [
-  {
-    label: "Consultation Ready",
-    text: "Hi {{name}}, I reviewed your tattoo design brief and references! I'd love to discuss placement and sizing with you.",
-  },
-  {
-    label: "Deposit Payment Link",
-    text: "Hi {{name}}, your custom tattoo quote has been prepared. Please confirm your booking with the deposit link here:",
-  },
-  {
-    label: "Session Reminder",
-    text: "Hi {{name}}, friendly reminder of our tattoo session tomorrow! Please stay well hydrated and arrive well-rested.",
-  },
-  {
-    label: "Aftercare Guide",
-    text: "Hi {{name}}, thank you for sitting today! Remember to follow the studio aftercare routine: keep it clean, moisturize gently, and avoid direct sun.",
-  },
-];
+import {
+  buildPersonalizedWhatsAppMessage,
+  buildPersonalizedWhatsAppUrl,
+  normalizePhoneForWhatsApp,
+  WHATSAPP_STAGE_TEMPLATES,
+  applyWhatsAppTemplate,
+} from "@/lib/services/whatsapp-composer";
 
 export function QuickWhatsAppComposer({
   customerName,
   customerPhone,
+  bookingStage,
+  serviceType,
+  placement,
+  isRepeat,
   onSend,
 }: {
   customerName: string;
   customerPhone: string;
+  bookingStage?: string | null;
+  serviceType?: string | null;
+  placement?: string | null;
+  isRepeat?: boolean;
   onSend: (content: string, logOnly?: boolean) => Promise<void>;
 }) {
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
 
-  const cleanPhone = customerPhone.replace(/[^0-9]/g, "");
+  const cleanPhone = normalizePhoneForWhatsApp(customerPhone);
 
-  const handleApplyTemplate = (tplText: string) => {
-    setMessage(tplText.replace("{{name}}", customerName.split(" ")[0]));
-  };
+  const defaultStageMessage = useMemo(() => {
+    return buildPersonalizedWhatsAppMessage({
+      phone: customerPhone,
+      name: customerName,
+      stage: bookingStage,
+      serviceType,
+      placement,
+      isRepeat,
+    });
+  }, [customerPhone, customerName, bookingStage, serviceType, placement, isRepeat]);
 
   const handleDirectWhatsAppWeb = async () => {
-    if (!message.trim()) {
+    const trimmed = message.trim();
+    const messageToSend = trimmed || defaultStageMessage;
+    if (!messageToSend) {
       toast.error("Please enter a message to send");
       return;
     }
-    const encoded = encodeURIComponent(message.trim());
-    const waUrl = `https://wa.me/${cleanPhone}?text=${encoded}`;
+
+    let waUrl = "";
+    if (!trimmed) {
+      waUrl = buildPersonalizedWhatsAppUrl({
+        phone: customerPhone,
+        name: customerName,
+        stage: bookingStage,
+        serviceType,
+        placement,
+        isRepeat,
+      });
+    } else if (
+      trimmed.startsWith("Hi ") ||
+      trimmed.startsWith("Hello ") ||
+      trimmed.startsWith("Hey ")
+    ) {
+      const phoneDigits = normalizePhoneForWhatsApp(customerPhone);
+      waUrl = phoneDigits ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(trimmed)}` : "";
+    } else {
+      waUrl = buildPersonalizedWhatsAppUrl({
+        phone: customerPhone,
+        name: customerName,
+        stage: bookingStage,
+        serviceType,
+        placement,
+        isRepeat,
+        customNote: trimmed,
+      });
+    }
+
+    if (!waUrl) {
+      toast.error("Failed to generate WhatsApp URL. Please verify customer phone number.");
+      return;
+    }
+
     window.open(waUrl, "_blank", "noopener,noreferrer");
 
     // Automatically log this message to the studio timeline
-    await onSend(message.trim(), true);
+    await onSend(messageToSend, true);
     setMessage("");
   };
 
   const handleSendCloudApi = async () => {
-    if (!message.trim()) {
+    const messageToSend = message.trim() || defaultStageMessage;
+    if (!messageToSend) {
       toast.error("Please enter a message to send");
       return;
     }
     setIsSending(true);
     try {
-      await onSend(message.trim(), false);
+      await onSend(messageToSend, false);
       setMessage("");
     } finally {
       setIsSending(false);
@@ -72,13 +111,14 @@ export function QuickWhatsAppComposer({
   };
 
   const handleLogOnly = async () => {
-    if (!message.trim()) {
+    const messageToSend = message.trim() || defaultStageMessage;
+    if (!messageToSend) {
       toast.error("Please enter a message to log");
       return;
     }
     setIsSending(true);
     try {
-      await onSend(message.trim(), true);
+      await onSend(messageToSend, true);
       setMessage("");
     } finally {
       setIsSending(false);
@@ -94,27 +134,57 @@ export function QuickWhatsAppComposer({
             Quick WhatsApp Dispatch & Log
           </h3>
         </div>
-        <span className="text-[11px] text-muted-foreground">To: +{cleanPhone}</span>
+        <span className="text-[11px] text-muted-foreground">
+          To: +{cleanPhone || customerPhone}
+        </span>
       </div>
 
-      {/* Quick Templates */}
-      <div className="mb-2 flex flex-wrap gap-1.5">
-        {TEMPLATES.map((tpl) => (
+      {/* Quick Templates & Load Stage Default */}
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setMessage(defaultStageMessage)}
+          className="h-6 px-2.5 text-[10px] font-medium rounded-full border-[#C4FF61]/50 bg-[#C4FF61]/10 text-emerald-800 dark:text-[#C4FF61] hover:bg-[#C4FF61]/20 transition-colors"
+          title="Load stage-specific default message"
+        >
+          <Sparkles className="mr-1 size-2.5 text-emerald-600 dark:text-[#C4FF61]" />
+          Load Stage Default
+        </Button>
+        {WHATSAPP_STAGE_TEMPLATES.map((tpl) => (
           <button
-            key={tpl.label}
+            key={tpl.stage}
             type="button"
-            onClick={() => handleApplyTemplate(tpl.text)}
-            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:border-[#C4FF61] hover:text-foreground transition-colors"
+            onClick={() => setMessage(applyWhatsAppTemplate(tpl.text, customerName))}
+            className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
+              bookingStage === tpl.stage
+                ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-semibold"
+                : "border-border/70 bg-muted/40 text-muted-foreground hover:border-[#C4FF61] hover:text-foreground"
+            }`}
           >
             + {tpl.label}
           </button>
         ))}
+        {message && (
+          <button
+            type="button"
+            onClick={() => setMessage("")}
+            className="rounded-full px-2 py-0.5 text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       <Textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
-        placeholder={`Type a message to ${customerName}...`}
+        placeholder={
+          defaultStageMessage
+            ? `Type a message to ${customerName} (or leave empty to send stage default)...`
+            : `Type a message to ${customerName}...`
+        }
         className="min-h-[85px] text-xs resize-none bg-background/50 focus-visible:ring-1 focus-visible:ring-[#C4FF61]"
       />
 
@@ -124,7 +194,7 @@ export function QuickWhatsAppComposer({
           size="sm"
           variant="outline"
           onClick={handleLogOnly}
-          disabled={isSending || !message.trim()}
+          disabled={isSending || (!message.trim() && !defaultStageMessage)}
           className="text-xs h-8 text-muted-foreground hover:text-foreground"
         >
           <BookmarkCheck className="mr-1.5 size-3" /> Log to Timeline Only
@@ -135,7 +205,7 @@ export function QuickWhatsAppComposer({
             type="button"
             size="sm"
             onClick={handleDirectWhatsAppWeb}
-            disabled={!message.trim()}
+            disabled={!message.trim() && !defaultStageMessage}
             className="h-8 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs"
           >
             <ExternalLink className="mr-1.5 size-3" /> Open in WhatsApp Web
@@ -145,7 +215,7 @@ export function QuickWhatsAppComposer({
             type="button"
             size="sm"
             onClick={handleSendCloudApi}
-            disabled={isSending || !message.trim()}
+            disabled={isSending || (!message.trim() && !defaultStageMessage)}
             className="h-8 text-xs bg-foreground text-background hover:bg-foreground/90 disabled:opacity-40"
           >
             {isSending ? (

@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { buildPersonalizedWhatsAppUrl } from "@/lib/services/whatsapp-composer";
 
 type Customer = {
   id: string;
@@ -163,12 +164,12 @@ export default function CustomersClient({
           </Card>
         ) : (
           filteredCustomers.map((c) => {
-            const cleanPhone = c.phone.replace(/[^0-9]/g, "");
-            const waUrl = cleanPhone
-              ? `https://wa.me/${cleanPhone}?text=Hello%20${encodeURIComponent(
-                  c.name
-                )},%20this%20is%20Prerna%20from%20MeetPrerna%20Studio.`
-              : null;
+            const waUrl = buildPersonalizedWhatsAppUrl({
+              phone: c.phone,
+              name: c.name,
+              stage: c.latestBookingStage || null,
+              isRepeat: c.isRepeat,
+            });
 
             return (
               <Card
@@ -262,7 +263,7 @@ export default function CustomersClient({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {waUrl && (
+                      {Boolean(waUrl) && (
                         <a
                           href={waUrl}
                           target="_blank"

@@ -34,6 +34,7 @@ import { UploadMediaModal } from "@/components/dashboard/customer-workspace/moda
 import { LogCallModal } from "@/components/dashboard/customer-workspace/modals/log-call-modal";
 import { PaperConsentOverrideModal } from "@/components/dashboard/customer-workspace/modals/paper-consent-override-modal";
 import { ImageLightboxModal } from "@/components/dashboard/customer-workspace/modals/image-lightbox-modal";
+import { buildPersonalizedWhatsAppUrl } from "@/lib/services/whatsapp-composer";
 
 import type { UnifiedCustomerWorkspaceData } from "@/lib/customers";
 
@@ -104,10 +105,26 @@ export default function CustomerWorkspaceClient({
       const textarea = composer.querySelector("textarea");
       if (textarea) textarea.focus();
     } else {
-      const cleanPhone = initialData.customer.phone.replace(/[^0-9]/g, "");
-      window.open(`https://wa.me/${cleanPhone}`, "_blank", "noopener,noreferrer");
+      const waUrl = buildPersonalizedWhatsAppUrl({
+        phone: initialData.customer.phone,
+        name: initialData.customer.name,
+        stage: activeBooking?.stage || null,
+        serviceType: activeBooking?.serviceType || null,
+        placement: activeBooking?.placement || null,
+        isRepeat: initialData.bookings?.length > 1,
+      });
+      if (waUrl) {
+        window.open(waUrl, "_blank", "noopener,noreferrer");
+      }
     }
-  }, [initialData.customer.phone]);
+  }, [
+    initialData.customer.phone,
+    initialData.customer.name,
+    initialData.bookings?.length,
+    activeBooking?.stage,
+    activeBooking?.serviceType,
+    activeBooking?.placement,
+  ]);
 
   // Quick Action: Email
   const handleOpenEmail = useCallback(() => {
@@ -371,6 +388,10 @@ export default function CustomerWorkspaceClient({
               <QuickWhatsAppComposer
                 customerName={initialData.customer.name}
                 customerPhone={initialData.customer.phone}
+                bookingStage={activeBooking?.stage || null}
+                serviceType={activeBooking?.serviceType || null}
+                placement={activeBooking?.placement || null}
+                isRepeat={initialData.bookings?.length > 1}
                 onSend={handleSendWhatsAppOptimistic}
               />
             </div>

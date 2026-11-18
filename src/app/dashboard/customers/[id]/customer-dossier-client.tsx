@@ -31,6 +31,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { buildPersonalizedWhatsAppUrl } from "@/lib/services/whatsapp-composer";
 
 type Props = {
   initialProfile: {
@@ -108,12 +109,22 @@ export default function CustomerDossierClient({ initialProfile }: Props) {
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [activePhoto, setActivePhoto] = useState<string | null>(null);
 
-  const cleanPhone = customer.phone.replace(/[^0-9]/g, "");
-  const waUrl = cleanPhone
-    ? `https://wa.me/${cleanPhone}?text=Hello%20${encodeURIComponent(
-        customer.name
-      )},%20this%20is%20Prerna%20from%20MeetPrerna%20Studio.`
-    : null;
+  const activeBooking =
+    bookings.find(
+      (b) =>
+        b.stage !== "closed_followup" &&
+        b.stage !== "not_a_fit" &&
+        b.stage !== "cancelled"
+    ) || bookings[0];
+
+  const waUrl = buildPersonalizedWhatsAppUrl({
+    phone: customer.phone,
+    name: customer.name,
+    stage: activeBooking?.stage || null,
+    serviceType: activeBooking?.serviceType || null,
+    placement: activeBooking?.placement || null,
+    isRepeat: bookings.length > 1,
+  });
 
   async function handleSaveNotes() {
     setIsSavingNotes(true);
@@ -232,7 +243,7 @@ export default function CustomerDossierClient({ initialProfile }: Props) {
               </div>
 
               <div className="flex items-center gap-2">
-                {waUrl && (
+                {Boolean(waUrl) && (
                   <a
                     href={waUrl}
                     target="_blank"
