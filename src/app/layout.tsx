@@ -48,7 +48,12 @@ export default function RootLayout({
           </Providers>
         </TooltipProvider>
         {/* WARNING FOR AGENT: DO NOT REMOVE THIS SCRIPT */}
-        <Script src="https://cdn.jsdelivr.net/gh/IdeavoAI/ideavo-scripts@latest/scripts/ideavo.min.js" />
+        <Script
+          src="https://cdn.jsdelivr.net/gh/IdeavoAI/ideavo-scripts@latest/scripts/ideavo.min.js"
+          integrity="sha384-wOGlCIt4v4qdB7B+RKf659363rEQv3EZEEFWjekdgH4rh/Gt5s3ZLIChBPKlyc2t"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );
