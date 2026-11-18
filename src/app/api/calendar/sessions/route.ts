@@ -12,6 +12,7 @@ import { randomUUID } from "crypto";
 import { jsonError } from "@/lib/route-utils";
 import { ensureMediaTables } from "@/lib/gallery";
 import { createSessionEvent } from "@/lib/services/calendar";
+import { sendEmail, EMAIL_TEMPLATES } from "@/lib/services/email";
 
 export async function GET(req: NextRequest) {
   try {
@@ -227,6 +228,7 @@ export async function POST(req: NextRequest) {
     let resolvedClientId = clientId;
     let resolvedClientName = "";
     let resolvedClientPhone = "";
+    let resolvedClientEmail = "";
     let targetBookingId = incomingBookingId || null;
     let sessionNumber = 1;
 
@@ -247,6 +249,7 @@ export async function POST(req: NextRequest) {
       resolvedClientId = existingBooking.clientId;
       resolvedClientName = existingBooking.client.name;
       resolvedClientPhone = existingBooking.client.phone;
+      resolvedClientEmail = existingBooking.client.email ?? "";
 
       // Count existing sessions for this booking to determine session number
       const existingSessionsCount = await db
@@ -295,6 +298,7 @@ export async function POST(req: NextRequest) {
         resolvedClientId = randomUUID();
         resolvedClientName = newClient.name;
         resolvedClientPhone = newClient.phone;
+        resolvedClientEmail = newClient.email;
 
         await db.insert(clients).values({
           id: resolvedClientId,
@@ -336,6 +340,7 @@ export async function POST(req: NextRequest) {
       }
       resolvedClientName = client.name;
       resolvedClientPhone = client.phone;
+      resolvedClientEmail = client.email ?? "";
 
       // Check if client already has an active, non-terminal booking
       const activeBooking = await db.query.bookings.findFirst({
@@ -453,6 +458,7 @@ export async function POST(req: NextRequest) {
             .join("\n"),
           start,
           end,
+          attendeeEmail: resolvedClientEmail ?? undefined,
         });
       }
     } catch (calErr) {
@@ -489,6 +495,50 @@ export async function POST(req: NextRequest) {
       `Please arrive 10 minutes early. Looking forward to our session!`;
 
     const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(whatsappMessage)}`;
+
+    // 7. SEND CONFIRMATION EMAILS TO BOTH PARTIES
+    const clientEmailHtml = EMAIL_TEMPLATES.sessionConfirmation(
+      resolvedClientName,
+      `${dateFormatted} at ${startTimeStr}`,
+      "Meet Prerna Studio, Indiranagar, Bangalore",
+      "Please arrive 10 minutes early. Looking forward to your session!"
+    );
+    const artistEmailHtml = `
+      <p>Hi ${user.name ?? "Artist"},</p>
+      <p>A new appointment has been scheduled:</p>
+      <ul>
+        <li><strong>Client:</strong> ${resolvedClientName}</li>
+        <li><strong>Service:</strong> ${meetingDisplayName}${placement ? ` (${placement})` : ""}</li>
+        <li><strong>Date:</strong> ${dateFormatted}</li>
+        <li><strong>Time:</strong> ${startTimeStr} to ${endTimeStr} (${durationHours} hrs)</li>
+        <li><strong>Client phone:</strong> ${resolvedClientPhone}</li>
+        <li><strong>Client email:</strong> ${resolvedClientEmail}</li>
+      </ul>
+      <p>Booking ID: ${targetBookingId}</p>
+    `;
+
+    const emailPromises = [];
+    if (resolvedClientEmail) {
+      emailPromises.push(
+        sendEmail({
+          to: resolvedClientEmail,
+          subject: clientEmailHtml.subject,
+          html: clientEmailHtml.html,
+          text: clientEmailHtml.text,
+        }).catch((err) => console.error("Client confirmation email failed:", err))
+      );
+    }
+    if (user.email) {
+      emailPromises.push(
+        sendEmail({
+          to: user.email,
+          subject: "New appointment scheduled",
+          html: artistEmailHtml,
+          text: `New appointment: ${resolvedClientName} on ${dateFormatted} at ${startTimeStr}`,
+        }).catch((err) => console.error("Artist notification email failed:", err))
+      );
+    }
+    await Promise.allSettled(emailPromises);
 
     return NextResponse.json({
       ok: true,
@@ -599,6 +649,64 @@ export async function PATCH(req: NextRequest) {
       .where(eq(bookingSessions.id, id))
       .returning();
 
+    // Notify both parties on reschedule
+    if (updates.scheduledStart) {
+      const sessionWithClient = await db.query.bookingSessions.findFirst({
+        where: eq(bookingSessions.id, id),
+        with: { booking: { with: { client: true } } },
+      });
+      if (sessionWithClient?.booking?.client) {
+        const client = sessionWithClient.booking.client;
+        const newStart = new Date(updates.scheduledStart);
+        const newEnd = new Date(updates.scheduledEnd || newStart.getTime() + (updates.durationMinutes || 180) * 60000);
+        const dateFormatted = newStart.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+        const startTimeStr = newStart.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
+        const endTimeStr = newEnd.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
+
+        const clientRescheduleHtml = EMAIL_TEMPLATES.sessionConfirmation(
+          client.name,
+          `${dateFormatted} at ${startTimeStr}`,
+          "Meet Prerna Studio, Indiranagar, Bangalore",
+          "Please arrive 10 minutes early. Your appointment has been rescheduled."
+        );
+        const artistRescheduleHtml = `
+          <p>Hi ${user.name ?? "Artist"},</p>
+          <p>An appointment has been rescheduled:</p>
+          <ul>
+            <li><strong>Client:</strong> ${client.name}</li>
+            <li><strong>New date:</strong> ${dateFormatted}</li>
+            <li><strong>New time:</strong> ${startTimeStr} to ${endTimeStr}</li>
+            <li><strong>Client phone:</strong> ${client.phone}</li>
+            <li><strong>Client email:</strong> ${client.email}</li>
+          </ul>
+          <p>Session ID: ${id}</p>
+        `;
+
+        const reschedulePromises = [];
+        if (client.email) {
+          reschedulePromises.push(
+            sendEmail({
+              to: client.email,
+              subject: clientRescheduleHtml.subject,
+              html: clientRescheduleHtml.html,
+              text: clientRescheduleHtml.text,
+            }).catch((err) => console.error("Client reschedule email failed:", err))
+          );
+        }
+        if (user.email) {
+          reschedulePromises.push(
+            sendEmail({
+              to: user.email,
+              subject: "Appointment rescheduled",
+              html: artistRescheduleHtml,
+              text: `Rescheduled: ${client.name} on ${dateFormatted} at ${startTimeStr}`,
+            }).catch((err) => console.error("Artist reschedule email failed:", err))
+          );
+        }
+        await Promise.allSettled(reschedulePromises);
+      }
+    }
+
     return NextResponse.json({ ok: true, session: updated });
   } catch (err) {
     return jsonError(err);
@@ -621,11 +729,66 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Session ID is required" }, { status: 400 });
     }
 
+    // Fetch session details before cancelling so we can notify both parties
+    const sessionToCancel = await db.query.bookingSessions.findFirst({
+      where: eq(bookingSessions.id, id),
+      with: { booking: { with: { client: true } } },
+    });
+
     // Mark as cancelled rather than hard deleting to preserve audit history
     await db
       .update(bookingSessions)
       .set({ status: "cancelled", updatedAt: new Date() })
       .where(eq(bookingSessions.id, id));
+
+    // Notify both parties on cancellation
+    if (sessionToCancel?.booking?.client) {
+      const client = sessionToCancel.booking.client;
+      const start = new Date(sessionToCancel.scheduledStart);
+      const dateFormatted = start.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+      const startTimeStr = start.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
+
+      const clientCancelHtml = `
+        <p>Hi ${client.name},</p>
+        <p>Your appointment on ${dateFormatted} at ${startTimeStr} has been cancelled.</p>
+        <p>Please contact the studio to reschedule.</p>
+      `;
+      const artistCancelHtml = `
+        <p>Hi ${user.name ?? "Artist"},</p>
+        <p>An appointment has been cancelled:</p>
+        <ul>
+          <li><strong>Client:</strong> ${client.name}</li>
+          <li><strong>Date:</strong> ${dateFormatted}</li>
+          <li><strong>Time:</strong> ${startTimeStr}</li>
+          <li><strong>Client phone:</strong> ${client.phone}</li>
+          <li><strong>Client email:</strong> ${client.email}</li>
+        </ul>
+        <p>Session ID: ${id}</p>
+      `;
+
+      const cancelPromises = [];
+      if (client.email) {
+        cancelPromises.push(
+          sendEmail({
+            to: client.email,
+            subject: "Appointment cancelled",
+            html: clientCancelHtml,
+            text: `Hi ${client.name}, your appointment on ${dateFormatted} at ${startTimeStr} has been cancelled.`,
+          }).catch((err) => console.error("Client cancel email failed:", err))
+        );
+      }
+      if (user.email) {
+        cancelPromises.push(
+          sendEmail({
+            to: user.email,
+            subject: "Appointment cancelled",
+            html: artistCancelHtml,
+            text: `Cancelled: ${client.name} on ${dateFormatted} at ${startTimeStr}`,
+          }).catch((err) => console.error("Artist cancel email failed:", err))
+        );
+      }
+      await Promise.allSettled(cancelPromises);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
