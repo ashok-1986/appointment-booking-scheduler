@@ -13,6 +13,11 @@ import { jsonError } from "@/lib/route-utils";
 import { ensureMediaTables } from "@/lib/gallery";
 import { createSessionEvent } from "@/lib/services/calendar";
 import { sendEmail, EMAIL_TEMPLATES } from "@/lib/services/email";
+import {
+  buildPersonalizedWhatsAppMessage,
+  buildPersonalizedWhatsAppUrl,
+  normalizePhoneForWhatsApp,
+} from "@/lib/services/whatsapp-composer";
 
 export async function GET(req: NextRequest) {
   try {
@@ -466,7 +471,6 @@ export async function POST(req: NextRequest) {
     }
 
     // 6. PREPARE QUICK WHATSAPP CONFIRMATION MESSAGE & URL
-    const cleanPhone = resolvedClientPhone.replace(/[^0-9]/g, "");
     const dateFormatted = start.toLocaleDateString("en-IN", {
       weekday: "short",
       day: "numeric",
@@ -485,16 +489,27 @@ export async function POST(req: NextRequest) {
     });
     const durationHours = (duration / 60).toFixed(duration % 60 === 0 ? 0 : 1);
 
-    const whatsappMessage =
-      `Hi ${resolvedClientName}! ✨\n\n` +
-      `Your ${meetingDisplayName.toLowerCase()} with Prerna at Meet Prerna Studio is confirmed:\n` +
-      `📅 Date: ${dateFormatted}\n` +
-      `⏰ Time: ${startTimeStr} to ${endTimeStr} (${durationHours} hrs)\n` +
-      `🎨 Type: ${meetingDisplayName}${placement ? ` (${placement})` : ""}\n` +
-      `📍 Studio: Indiranagar, Bangalore\n\n` +
-      `Please arrive 10 minutes early. Looking forward to our session!`;
+    const whatsappMessage = buildPersonalizedWhatsAppMessage({
+      phone: resolvedClientPhone,
+      name: resolvedClientName,
+      stage: "confirmed_scheduled",
+      serviceType: meetingDisplayName,
+      placement: placement || null,
+      sessionDate: dateFormatted,
+      sessionTime: `${startTimeStr} to ${endTimeStr}`,
+      durationHours,
+    });
 
-    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(whatsappMessage)}`;
+    const whatsappUrl = buildPersonalizedWhatsAppUrl({
+      phone: resolvedClientPhone,
+      name: resolvedClientName,
+      stage: "confirmed_scheduled",
+      serviceType: meetingDisplayName,
+      placement: placement || null,
+      sessionDate: dateFormatted,
+      sessionTime: `${startTimeStr} to ${endTimeStr}`,
+      durationHours,
+    });
 
     // 7. SEND CONFIRMATION EMAILS TO BOTH PARTIES
     const clientEmailHtml = EMAIL_TEMPLATES.sessionConfirmation(

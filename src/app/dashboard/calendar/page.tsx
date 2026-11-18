@@ -40,6 +40,11 @@ import { StatusBadge, ConsentBadge } from "@/components/dashboard/calendar/statu
 import { AppointmentModal } from "@/components/dashboard/calendar/appointment-modal";
 import { SessionDetailsModal } from "@/components/dashboard/calendar/session-details-modal";
 import { WhatsAppConfirmationModal } from "@/components/dashboard/calendar/whatsapp-modal";
+import {
+  buildPersonalizedWhatsAppMessage,
+  buildPersonalizedWhatsAppUrl,
+  normalizePhoneForWhatsApp,
+} from "@/lib/services/whatsapp-composer";
 
 export default function CalendarPage() {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
@@ -212,12 +217,65 @@ export default function CalendarPage() {
         fetchSessions();
 
         // Offer immediate WhatsApp confirmation
-        if (data.whatsappMessage && data.whatsappUrl) {
+        const clientName = data.client?.name || (isNewClient ? newClientName : "Client");
+        const clientPhone = data.client?.phone || (isNewClient ? newClientPhone : "");
+        const durationHours = (appointmentDuration / 60).toFixed(
+          appointmentDuration % 60 === 0 ? 0 : 1
+        );
+        const [year, month, day] = appointmentDate.split("-").map(Number);
+        const [hour, min] = appointmentTime.split(":").map(Number);
+        const startDate = new Date(year, month - 1, day, hour, min);
+        const endDate = new Date(startDate.getTime() + appointmentDuration * 60000);
+
+        const dateFormatted = startDate.toLocaleDateString("en-IN", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
+        const startTimeStr = startDate.toLocaleTimeString("en-IN", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        });
+        const endTimeStr = endDate.toLocaleTimeString("en-IN", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        });
+
+        const whatsappMessage =
+          data.whatsappMessage ||
+          buildPersonalizedWhatsAppMessage({
+            phone: clientPhone,
+            name: clientName,
+            stage: "confirmed_scheduled",
+            serviceType,
+            placement: placement || null,
+            sessionDate: dateFormatted,
+            sessionTime: `${startTimeStr} to ${endTimeStr}`,
+            durationHours,
+          });
+
+        const whatsappUrl =
+          data.whatsappUrl ||
+          buildPersonalizedWhatsAppUrl({
+            phone: clientPhone,
+            name: clientName,
+            stage: "confirmed_scheduled",
+            serviceType,
+            placement: placement || null,
+            sessionDate: dateFormatted,
+            sessionTime: `${startTimeStr} to ${endTimeStr}`,
+            durationHours,
+          });
+
+        if (clientPhone && (whatsappMessage || whatsappUrl)) {
           setWhatsappData({
-            clientName: data.client.name,
-            phone: data.client.phone,
-            message: data.whatsappMessage,
-            url: data.whatsappUrl,
+            clientName,
+            phone: clientPhone,
+            message: whatsappMessage,
+            url: whatsappUrl,
           });
           setWhatsappModalOpen(true);
         }
@@ -238,7 +296,6 @@ export default function CalendarPage() {
 
     const start = new Date(session.scheduledStart);
     const end = new Date(session.scheduledEnd);
-    const cleanPhone = session.client.phone.replace(/[^0-9]/g, "");
 
     const dateFormatted = start.toLocaleDateString("en-IN", {
       weekday: "short",
@@ -260,16 +317,27 @@ export default function CalendarPage() {
       session.durationMinutes % 60 === 0 ? 0 : 1
     );
 
-    const message =
-      `Hi ${session.client.name}! ✨\n\n` +
-      `Your tattoo session with Prerna at Meet Prerna Studio is confirmed:\n` +
-      `📅 Date: ${dateFormatted}\n` +
-      `⏰ Time: ${startTimeStr} to ${endTimeStr} (${durationHours} hrs)\n` +
-      `🎨 Service: ${session.booking.serviceType}${session.booking.placement ? ` (${session.booking.placement})` : ""}\n` +
-      `📍 Studio: Indiranagar, Bangalore\n\n` +
-      `Please arrive 10 minutes early, well-hydrated and having eaten a good meal. Looking forward to creating your piece!`;
+    const message = buildPersonalizedWhatsAppMessage({
+      phone: session.client.phone,
+      name: session.client.name,
+      stage: "confirmed_scheduled",
+      serviceType: session.booking.serviceType,
+      placement: session.booking.placement,
+      sessionDate: dateFormatted,
+      sessionTime: `${startTimeStr} to ${endTimeStr}`,
+      durationHours,
+    });
 
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    const url = buildPersonalizedWhatsAppUrl({
+      phone: session.client.phone,
+      name: session.client.name,
+      stage: "confirmed_scheduled",
+      serviceType: session.booking.serviceType,
+      placement: session.booking.placement,
+      sessionDate: dateFormatted,
+      sessionTime: `${startTimeStr} to ${endTimeStr}`,
+      durationHours,
+    });
 
     setWhatsappData({
       clientName: session.client.name,
