@@ -4,7 +4,7 @@ import {
   bookingSessions,
   clients,
   payments,
-  consentForms,
+  consentRecords,
   messages,
   auditLogs,
   serviceTypes,
@@ -1051,14 +1051,12 @@ export async function sendConsentForm(bookingId: string, formUrl: string) {
   if (!booking) return { ok: false, error: "Booking not found" };
 
   const consentId = randomUUID();
-  await db.insert(consentForms).values({
+  await db.insert(consentRecords).values({
     id: consentId,
     bookingId,
-    formData: {
-      healthDisclosures: true,
-      designApproval: true,
-      photoPermissions: true,
-    },
+    clientId: booking.clientId,
+    status: "pending",
+    reminderCount: 0,
   });
 
   await db
@@ -1106,16 +1104,68 @@ export async function signConsentForm(
   if (!booking) return { ok: false, error: "Booking not found" };
 
   const now = new Date();
+  const legalName = typeof signedData.legalName === "string" ? signedData.legalName : undefined;
+  const dateOfBirth = typeof signedData.dateOfBirth === "string" ? signedData.dateOfBirth : undefined;
+  const signatureImageUrl = typeof signedData.signatureImageUrl === "string"
+    ? signedData.signatureImageUrl
+    : typeof signedData.signatureDataUrl === "string"
+    ? signedData.signatureDataUrl
+    : typeof signedData.signature === "string"
+    ? signedData.signature
+    : undefined;
+
+  const healthDisclosures = (signedData.healthDisclosures as any) ?? {
+    allergies: Boolean(signedData.allergies && signedData.allergies !== "None"),
+    allergiesDetails: typeof signedData.allergies === "string" && signedData.allergies !== "None" ? signedData.allergies : "",
+    bloodThinners: Boolean(signedData.bloodThinners),
+    skinConditions: Boolean(signedData.skinConditions && signedData.skinConditions !== "Healthy unbroken skin"),
+    skinConditionsDetails: typeof signedData.skinConditions === "string" ? signedData.skinConditions : "",
+    pregnantOrNursing: Boolean(signedData.pregnantOrNursing),
+    cardiacOrEpileptic: Boolean(signedData.cardiacOrEpileptic),
+    idProofType: typeof signedData.idProofType === "string" ? signedData.idProofType : undefined,
+    idProofImageUrl: typeof signedData.idProofImageUrl === "string" ? signedData.idProofImageUrl : undefined,
+    idProofNumber: typeof signedData.idProofNumber === "string" ? signedData.idProofNumber : undefined,
+  };
+
+  const procedureConsent = typeof signedData.procedureConsent === "boolean"
+    ? signedData.procedureConsent
+    : typeof signedData.procedureAcknowledgement === "boolean"
+    ? signedData.procedureAcknowledgement
+    : true;
+
+  const photographyConsent = typeof signedData.photographyConsent === "boolean"
+    ? signedData.photographyConsent
+    : typeof signedData.photoConsent === "boolean"
+    ? signedData.photoConsent
+    : false;
+
+  const marketingConsent = typeof signedData.marketingConsent === "boolean"
+    ? signedData.marketingConsent
+    : false;
+
+  const ageVerified = typeof signedData.ageVerified === "boolean"
+    ? signedData.ageVerified
+    : typeof signedData.ageConfirmed === "boolean"
+    ? signedData.ageConfirmed
+    : true;
+
   await db
-    .update(consentForms)
+    .update(consentRecords)
     .set({
-      signedData,
-      formData: signedData,
+      status: "signed",
       signedAt: now,
-      ipAddress,
-      userAgent,
+      legalName,
+      dateOfBirth,
+      ageVerified,
+      procedureConsent,
+      photographyConsent,
+      marketingConsent,
+      healthDisclosures,
+      signatureImageUrl,
+      signerIp: ipAddress,
+      signerUserAgent: userAgent,
     })
-    .where(eq(consentForms.bookingId, bookingId));
+    .where(eq(consentRecords.bookingId, bookingId));
 
   await db
     .update(bookings)
@@ -1570,8 +1620,8 @@ export async function listPayments(bookingId: string) {
 }
 
 export async function getConsentForm(bookingId: string) {
-  return db.query.consentForms.findFirst({
-    where: eq(consentForms.bookingId, bookingId),
+  return db.query.consentRecords.findFirst({
+    where: eq(consentRecords.bookingId, bookingId),
   });
 }
 

@@ -6,7 +6,6 @@ import {
   bookings,
   bookingSessions,
   consentRecords,
-  consentForms,
   auditLogs,
   clients,
 } from "@/lib/schema";
@@ -125,7 +124,6 @@ export async function POST(
     }
 
     const now = new Date();
-    const consentRecordId = randomUUID();
 
     // Backfill client dateOfBirth if not previously recorded on client profile
     if (booking.clientId && dateOfBirth && !booking.client?.dateOfBirth) {
@@ -148,12 +146,18 @@ export async function POST(
 
     const primarySessionId = sessions.length > 0 ? sessions[0].id : null;
 
-    // 5. Save Digital Consent into consent_records
-    await db.insert(consentRecords).values({
-      id: consentRecordId,
-      sessionId: primarySessionId,
+    // 5. Save Digital Consent into canonical consent_records (single source of truth)
+    const existingRecord = await db.query.consentRecords.findFirst({
+      where: eq(consentRecords.bookingId, bookingId),
+    });
+
+    const consentRecordId = existingRecord?.id || randomUUID();
+
+    const consentData = {
+      sessionId: primarySessionId ?? existingRecord?.sessionId ?? null,
       bookingId,
       clientId: booking.clientId,
+      status: "signed",
       legalName,
       dateOfBirth,
       ageVerified,
@@ -177,75 +181,28 @@ export async function POST(
       signerIp: ip,
       signerUserAgent: ua,
       signedAt: now,
-      createdAt: now,
-    });
-
-    // 6. Save / Upsert into legacy consent_forms table
-    const existingConsentForm = await db.query.consentForms.findFirst({
-      where: eq(consentForms.bookingId, bookingId),
-    });
-
-    const legacyPayload = {
-      fullName: legalName,
-      legalName,
-      dateOfBirth,
-      idProofType,
-      idProofImageUrl,
-      idProofNumber,
-      procedureConsent: true,
-      photographyConsent,
-      marketingConsent,
-      healthDisclosure: true,
-      designApproval: true,
-      photoPermission: photographyConsent,
-      signature: signatureImageUrl,
-      signatureImageUrl,
-      signedAt: now.toISOString(),
-      healthDisclosures,
     };
 
-    if (existingConsentForm) {
+    if (existingRecord) {
       await db
-        .update(consentForms)
-        .set({
-          signedData: legacyPayload,
-          signedAt: now,
-          ipAddress: ip,
-          userAgent: ua,
-          updatedAt: now,
-        })
-        .where(eq(consentForms.bookingId, bookingId));
+        .update(consentRecords)
+        .set(consentData)
+        .where(eq(consentRecords.id, existingRecord.id));
     } else {
-      await db.insert(consentForms).values({
-        id: randomUUID(),
-        bookingId,
-        formData: {
-          legalName,
-          dateOfBirth,
-          idProofType,
-          idProofImageUrl,
-          idProofNumber,
-          healthDisclosures,
-          procedureConsent: true,
-          photographyConsent,
-          marketingConsent,
-        },
-        signedData: legacyPayload,
-        signedAt: now,
-        ipAddress: ip,
-        userAgent: ua,
+      await db.insert(consentRecords).values({
+        id: consentRecordId,
+        ...consentData,
         createdAt: now,
-        updatedAt: now,
       });
     }
 
-    // 7. Update booking_sessions.consent_status = 'signed' for associated sessions
+    // 6. Update booking_sessions.consent_status = 'signed' for associated sessions
     await db
       .update(bookingSessions)
       .set({ consentStatus: "signed" })
       .where(eq(bookingSessions.bookingId, bookingId));
 
-    // 8. Update bookings.consent_signed_at = now()
+    // 7. Update bookings.consent_signed_at = now()
     await db
       .update(bookings)
       .set({
@@ -254,7 +211,7 @@ export async function POST(
       })
       .where(eq(bookings.id, bookingId));
 
-    // 9. Log Audit Trail Entry
+    // 8. Log Audit Trail Entry
     await db.insert(auditLogs).values({
       id: randomUUID(),
       bookingId,
@@ -281,7 +238,7 @@ export async function POST(
       createdAt: now,
     });
 
-    // 10. Optional HubSpot update if deal exists
+    // 9. Optional HubSpot update if deal exists
     if (booking.hubspotDealId) {
       try {
         await addNote(

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { bookings, consentForms, messages } from "@/lib/schema";
+import { bookings, consentRecords, messages } from "@/lib/schema";
 import { eq, and, gte, lte, isNull, sql, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import {
@@ -137,9 +137,12 @@ export async function GET(req: NextRequest) {
         const formUrl = `${process.env.NEXT_PUBLIC_APP_URL}/consent/${b.id}`;
         await sendConsentReminder(b, formUrl);
         await db
-          .update(consentForms)
-          .set({ reminderCount: sql`${consentForms.reminderCount} + 1` })
-          .where(eq(consentForms.bookingId, b.id));
+          .update(consentRecords)
+          .set({
+            reminderCount: sql`${consentRecords.reminderCount} + 1`,
+            reminderSentAt: new Date(),
+          })
+          .where(eq(consentRecords.bookingId, b.id));
 
         await db.insert(messages).values({
           id: randomUUID(),

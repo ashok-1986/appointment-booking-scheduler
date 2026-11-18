@@ -431,9 +431,12 @@ export const consentRecords = pgTable(
     clientId: text("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
-    legalName: text("legal_name").notNull(),
-    dateOfBirth: text("date_of_birth").notNull(),
-    ageVerified: boolean("age_verified").notNull(),
+    status: text("status").default("pending").notNull(),
+    reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
+    reminderCount: integer("reminder_count").default(0).notNull(),
+    legalName: text("legal_name"),
+    dateOfBirth: text("date_of_birth"),
+    ageVerified: boolean("age_verified").default(false).notNull(),
     healthDisclosures: jsonb("health_disclosures").$type<{
       allergies?: boolean;
       allergiesDetails?: string;
@@ -445,17 +448,15 @@ export const consentRecords = pgTable(
       idProofType?: string;
       idProofImageUrl?: string;
       idProofNumber?: string;
-    }>().notNull(),
-    procedureConsent: boolean("procedure_consent").notNull(),
-    photographyConsent: boolean("photography_consent").notNull(),
-    marketingConsent: boolean("marketing_consent").notNull(),
-    signatureImageUrl: text("signature_image_url").notNull(),
+    }>(),
+    procedureConsent: boolean("procedure_consent").default(false).notNull(),
+    photographyConsent: boolean("photography_consent").default(false).notNull(),
+    marketingConsent: boolean("marketing_consent").default(false).notNull(),
+    signatureImageUrl: text("signature_image_url"),
     pdfUrl: text("pdf_url"),
     signerIp: text("signer_ip"),
     signerUserAgent: text("signer_user_agent"),
-    signedAt: timestamp("signed_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    signedAt: timestamp("signed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -464,6 +465,7 @@ export const consentRecords = pgTable(
     index("consent_records_session_id_idx").on(table.sessionId),
     index("consent_records_booking_id_idx").on(table.bookingId),
     index("consent_records_client_id_idx").on(table.clientId),
+    index("consent_records_status_idx").on(table.status),
   ]
 );
 
