@@ -272,6 +272,29 @@ export const auditLogs = pgTable(
   ]
 );
 
+export const integrationLogs = pgTable(
+  "integration_logs",
+  {
+    id: text("id").primaryKey(),
+    bookingId: text("booking_id")
+      .references(() => bookings.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(), // 'hubspot' | 'calendar' | 'whatsapp' | 'email' | 'razorpay'
+    action: text("action").notNull(),
+    status: text("status").notNull(), // 'success' | 'failure'
+    payload: jsonb("payload"),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("integration_logs_booking_id_idx").on(table.bookingId),
+    index("integration_logs_provider_idx").on(table.provider),
+    index("integration_logs_status_idx").on(table.status),
+    index("integration_logs_created_at_idx").on(table.createdAt),
+  ]
+);
+
 export const artistAvailability = pgTable(
   "artist_availability",
   {
@@ -453,6 +476,7 @@ export const insertPaymentSchema = createInsertSchema(payments);
 export const insertConsentFormSchema = createInsertSchema(consentForms);
 export const insertMessageSchema = createInsertSchema(messages);
 export const insertAuditLogSchema = createInsertSchema(auditLogs);
+export const insertIntegrationLogSchema = createInsertSchema(integrationLogs);
 export const insertArtistAvailabilitySchema = createInsertSchema(
   artistAvailability
 );
@@ -469,6 +493,7 @@ export type Payment = typeof payments.$inferSelect;
 export type ConsentForm = typeof consentForms.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type IntegrationLog = typeof integrationLogs.$inferSelect;
 export type ArtistAvailability = typeof artistAvailability.$inferSelect;
 export type ServiceType = typeof serviceTypes.$inferSelect;
 export type UserRole = typeof userRoles.$inferSelect;
@@ -482,6 +507,7 @@ export type NewPayment = typeof payments.$inferInsert;
 export type NewConsentForm = typeof consentForms.$inferInsert;
 export type NewMessage = typeof messages.$inferInsert;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
+export type NewIntegrationLog = typeof integrationLogs.$inferInsert;
 export type NewArtistAvailability = typeof artistAvailability.$inferInsert;
 export type NewServiceType = typeof serviceTypes.$inferInsert;
 export type NewUserRole = typeof userRoles.$inferInsert;
@@ -505,6 +531,14 @@ export const bookingsRelations = relations(bookings, ({ one, many }) => ({
   consentForm: one(consentForms, {
     fields: [bookings.id],
     references: [consentForms.bookingId],
+  }),
+  integrationLogs: many(integrationLogs),
+}));
+
+export const integrationLogsRelations = relations(integrationLogs, ({ one }) => ({
+  booking: one(bookings, {
+    fields: [integrationLogs.bookingId],
+    references: [bookings.id],
   }),
 }));
 

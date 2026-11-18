@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import {
   bookings,
+  bookingSessions,
   clients,
   payments,
   consentForms,
@@ -9,7 +10,7 @@ import {
   serviceTypes,
   users,
 } from "@/lib/schema";
-import { eq, and, or, desc, asc } from "drizzle-orm";
+import { eq, and, or, desc, asc, sql } from "drizzle-orm";
 import {
   createContact,
   createDeal,
@@ -37,6 +38,7 @@ import {
 } from "@/lib/services/calendar";
 import { randomUUID } from "crypto";
 import { canTransitionV1, normalizeToV1Stage } from "@/lib/state-machine";
+import { recordIntegrationLog } from "@/lib/services/integration-logger";
 
 export type BookingWithClient = typeof bookings.$inferSelect & {
   client: typeof clients.$inferSelect;
@@ -128,6 +130,7 @@ export async function createEnquiry(
     where: or(eq(clients.email, input.email), eq(clients.phone, input.phone)),
   });
 
+  const bookingId = randomUUID();
   let clientId: string;
   let hubspotContactId: string | null = null;
 
@@ -161,8 +164,23 @@ export async function createEnquiry(
         .update(clients)
         .set({ hubspotContactId: hs.id })
         .where(eq(clients.id, clientId));
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "contact.create",
+        status: "success",
+        payload: { contactId: hs.id },
+      });
     } catch (err) {
       console.error("HubSpot contact creation failed", err);
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "contact.create",
+        status: "failure",
+        error: err,
+        payload: { email: input.email },
+      });
     }
   }
 
@@ -178,7 +196,6 @@ export async function createEnquiry(
     .filter(Boolean)
     .join("\n\n");
 
-  const bookingId = randomUUID();
   const stage = "enquiry" as const;
 
   await db.insert(bookings).values({
@@ -217,8 +234,22 @@ export async function createEnquiry(
       .update(bookings)
       .set({ hubspotDealId: deal.id })
       .where(eq(bookings.id, bookingId));
+    await recordIntegrationLog({
+      bookingId,
+      provider: "hubspot",
+      action: "deal.create",
+      status: "success",
+      payload: { dealId: deal.id },
+    });
   } catch (err) {
     console.error("HubSpot deal creation failed", err);
+    await recordIntegrationLog({
+      bookingId,
+      provider: "hubspot",
+      action: "deal.create",
+      status: "failure",
+      error: err,
+    });
   }
 
   const conf = EMAIL_TEMPLATES.enquiryConfirmation(input.name);
@@ -231,8 +262,23 @@ export async function createEnquiry(
     });
     await sendMessage(bookingId, "email", "outbound", conf.text, "enquiry_confirmation");
     if (hubspotContactId) await logEmail(hubspotContactId, conf.subject, conf.text);
+    await recordIntegrationLog({
+      bookingId,
+      provider: "email",
+      action: "email.send_confirmation",
+      status: "success",
+      payload: { to: input.email },
+    });
   } catch (err) {
     console.error("Confirmation email failed", err);
+    await recordIntegrationLog({
+      bookingId,
+      provider: "email",
+      action: "email.send_confirmation",
+      status: "failure",
+      error: err,
+      payload: { to: input.email },
+    });
   }
 
   await logAudit(bookingId, artistId, "enquiry.created", null, {
@@ -284,8 +330,23 @@ export async function updateConsultationStatus(
       await updateDealStage(booking.hubspotDealId, HUBSPOT_STAGE_MAP[newStage], {
         rejection_reason: reason,
       });
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "deal.stage_update",
+        status: "success",
+        payload: { stage: newStage },
+      });
     } catch (err) {
       console.error("HubSpot stage update failed", err);
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "deal.stage_update",
+        status: "failure",
+        error: err,
+        payload: { stage: newStage },
+      });
     }
   }
 
@@ -304,8 +365,23 @@ export async function updateConsultationStatus(
         text: decline.text,
       });
       await sendMessage(bookingId, "email", "outbound", decline.text, "decline");
+      await recordIntegrationLog({
+        bookingId,
+        provider: "email",
+        action: "email.send_decline",
+        status: "success",
+        payload: { to: booking.client.email },
+      });
     } catch (err) {
       console.error("Decline email failed", err);
+      await recordIntegrationLog({
+        bookingId,
+        provider: "email",
+        action: "email.send_decline",
+        status: "failure",
+        error: err,
+        payload: { to: booking.client.email },
+      });
     }
   }
 
@@ -335,17 +411,37 @@ export async function createDepositPaymentLink(
     };
   }
 
-  const link = await createPaymentLink({
-    amount,
-    referenceId: bookingId,
-    description: `Deposit for ${booking.serviceType}`,
-    customer: {
-      name: booking.client.name,
-      email: booking.client.email,
-      contact: booking.client.phone,
-    },
-    expirySeconds: 72 * 3600,
-  });
+  let link;
+  try {
+    link = await createPaymentLink({
+      amount,
+      referenceId: bookingId,
+      description: `Deposit for ${booking.serviceType}`,
+      customer: {
+        name: booking.client.name,
+        email: booking.client.email,
+        contact: booking.client.phone,
+      },
+      expirySeconds: 72 * 3600,
+    });
+    await recordIntegrationLog({
+      bookingId,
+      provider: "razorpay",
+      action: "payment_link.create_deposit",
+      status: "success",
+      payload: { linkId: link.id, amount },
+    });
+  } catch (err) {
+    await recordIntegrationLog({
+      bookingId,
+      provider: "razorpay",
+      action: "payment_link.create_deposit",
+      status: "failure",
+      error: err,
+      payload: { amount },
+    });
+    throw err;
+  }
 
   const paymentId = randomUUID();
   await db.insert(payments).values({
@@ -365,8 +461,23 @@ export async function createDepositPaymentLink(
   if (booking.hubspotDealId) {
     try {
       await updateDealStage(booking.hubspotDealId, HUBSPOT_STAGE_MAP.deposit_pending);
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "deal.stage_update",
+        status: "success",
+        payload: { stage: "deposit_pending" },
+      });
     } catch (err) {
       console.error(err);
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "deal.stage_update",
+        status: "failure",
+        error: err,
+        payload: { stage: "deposit_pending" },
+      });
     }
   }
 
@@ -388,8 +499,23 @@ export async function createDepositPaymentLink(
   try {
     await sendWhatsAppText(booking.client.phone, whatsappText);
     await sendMessage(bookingId, "whatsapp", "outbound", whatsappText, "deposit_link");
+    await recordIntegrationLog({
+      bookingId,
+      provider: "whatsapp",
+      action: "whatsapp.send_deposit_link",
+      status: "success",
+      payload: { phone: booking.client.phone },
+    });
   } catch (err) {
     console.error("WhatsApp deposit link failed", err);
+    await recordIntegrationLog({
+      bookingId,
+      provider: "whatsapp",
+      action: "whatsapp.send_deposit_link",
+      status: "failure",
+      error: err,
+      payload: { phone: booking.client.phone },
+    });
   }
   try {
     await sendEmail({
@@ -399,8 +525,23 @@ export async function createDepositPaymentLink(
       text: emailTpl.text,
     });
     await sendMessage(bookingId, "email", "outbound", emailTpl.text, "deposit_link");
+    await recordIntegrationLog({
+      bookingId,
+      provider: "email",
+      action: "email.send_deposit_link",
+      status: "success",
+      payload: { to: booking.client.email },
+    });
   } catch (err) {
     console.error("Email deposit link failed", err);
+    await recordIntegrationLog({
+      bookingId,
+      provider: "email",
+      action: "email.send_deposit_link",
+      status: "failure",
+      error: err,
+      payload: { to: booking.client.email },
+    });
   }
 
   await logAudit(bookingId, actorId ?? null, "deposit.link_created", null, {
@@ -545,8 +686,23 @@ export async function handleRazorpayWebhook(
           amount: String(payment.amount),
           balance_transaction_id: payment.id,
         });
+        await recordIntegrationLog({
+          bookingId: booking.id,
+          provider: "hubspot",
+          action: "deal.stage_update",
+          status: "success",
+          payload: { stage: "paid_in_full", amount: payment.amount },
+        });
       } catch (err) {
         console.error("HubSpot deal update failed (balance):", err);
+        await recordIntegrationLog({
+          bookingId: booking.id,
+          provider: "hubspot",
+          action: "deal.stage_update",
+          status: "failure",
+          error: err,
+          payload: { stage: "paid_in_full", amount: payment.amount },
+        });
       }
     }
 
@@ -565,8 +721,23 @@ export async function handleRazorpayWebhook(
         text: receipt.text,
       });
       await sendMessage(booking.id, "email", "outbound", receipt.text, "balance_receipt");
+      await recordIntegrationLog({
+        bookingId: booking.id,
+        provider: "email",
+        action: "email.send_balance_receipt",
+        status: "success",
+        payload: { to: booking.client.email },
+      });
     } catch (err) {
       console.error("Receipt email failed (balance):", err);
+      await recordIntegrationLog({
+        bookingId: booking.id,
+        provider: "email",
+        action: "email.send_balance_receipt",
+        status: "failure",
+        error: err,
+        payload: { to: booking.client.email },
+      });
     }
 
     await logAudit(booking.id, null, "balance.paid", null, {
@@ -602,8 +773,23 @@ export async function handleRazorpayWebhook(
           amount: String(payment.amount),
           deposit_transaction_id: payment.id,
         });
+        await recordIntegrationLog({
+          bookingId: booking.id,
+          provider: "hubspot",
+          action: "deal.stage_update",
+          status: "success",
+          payload: { stage: "deposit_paid", amount: payment.amount },
+        });
       } catch (err) {
         console.error("HubSpot deal update failed (deposit):", err);
+        await recordIntegrationLog({
+          bookingId: booking.id,
+          provider: "hubspot",
+          action: "deal.stage_update",
+          status: "failure",
+          error: err,
+          payload: { stage: "deposit_paid", amount: payment.amount },
+        });
       }
     }
 
@@ -622,8 +808,23 @@ export async function handleRazorpayWebhook(
         text: receipt.text,
       });
       await sendMessage(booking.id, "email", "outbound", receipt.text, "deposit_receipt");
+      await recordIntegrationLog({
+        bookingId: booking.id,
+        provider: "email",
+        action: "email.send_deposit_receipt",
+        status: "success",
+        payload: { to: booking.client.email },
+      });
     } catch (err) {
       console.error("Receipt email failed (deposit):", err);
+      await recordIntegrationLog({
+        bookingId: booking.id,
+        provider: "email",
+        action: "email.send_deposit_receipt",
+        status: "failure",
+        error: err,
+        payload: { to: booking.client.email },
+      });
     }
 
     await logAudit(booking.id, null, "deposit.paid", null, {
@@ -670,8 +871,23 @@ export async function proposeSessionDates(
   try {
     await sendWhatsAppText(booking.client.phone, whatsappText);
     await sendMessage(booking.id, "whatsapp", "outbound", whatsappText, "date_options");
+    await recordIntegrationLog({
+      bookingId,
+      provider: "whatsapp",
+      action: "whatsapp.send_date_options",
+      status: "success",
+      payload: { phone: booking.client.phone },
+    });
   } catch (err) {
     console.error("WhatsApp date options failed", err);
+    await recordIntegrationLog({
+      bookingId,
+      provider: "whatsapp",
+      action: "whatsapp.send_date_options",
+      status: "failure",
+      error: err,
+      payload: { phone: booking.client.phone },
+    });
   }
 
   await logAudit(bookingId, actorId ?? null, "session.dates_proposed", null, {
@@ -702,14 +918,33 @@ export async function confirmSessionDate(
     };
   }
 
-  const event = await createSessionEvent({
-    summary: `Session – ${booking.client.name} (${booking.serviceType})`,
-    description: booking.designDescription ?? undefined,
-    start: slot.start,
-    end: slot.end,
-    attendeeEmail: booking.client.email,
-    location: booking.sessionAddress ?? undefined,
-  });
+  let event;
+  try {
+    event = await createSessionEvent({
+      summary: `Session – ${booking.client.name} (${booking.serviceType})`,
+      description: booking.designDescription ?? undefined,
+      start: slot.start,
+      end: slot.end,
+      attendeeEmail: booking.client.email,
+      location: booking.sessionAddress ?? undefined,
+    });
+    await recordIntegrationLog({
+      bookingId,
+      provider: "calendar",
+      action: "calendar.create_event",
+      status: "success",
+      payload: { eventId: event.id },
+    });
+  } catch (err) {
+    await recordIntegrationLog({
+      bookingId,
+      provider: "calendar",
+      action: "calendar.create_event",
+      status: "failure",
+      error: err,
+    });
+    throw err;
+  }
 
   await db
     .update(bookings)
@@ -722,11 +957,46 @@ export async function confirmSessionDate(
     })
     .where(eq(bookings.id, bookingId));
 
+  // Create the canonical session record — the calendar reads from bookingSessions,
+  // so without this row an appointment confirmed through this path never shows up.
+  const existingSessionCount = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(bookingSessions)
+    .where(eq(bookingSessions.bookingId, bookingId));
+
+  await db.insert(bookingSessions).values({
+    id: randomUUID(),
+    bookingId,
+    sessionNumber: Number(existingSessionCount[0]?.count || 0) + 1,
+    scheduledStart: slot.start,
+    scheduledEnd: slot.end,
+    durationMinutes: Math.round((slot.end.getTime() - slot.start.getTime()) / 60000),
+    status: "scheduled",
+    consentStatus: "not_started",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
   if (booking.hubspotDealId) {
     try {
       await updateDealStage(booking.hubspotDealId, HUBSPOT_STAGE_MAP.scheduled);
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "deal.stage_update",
+        status: "success",
+        payload: { stage: "scheduled" },
+      });
     } catch (err) {
       console.error(err);
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "deal.stage_update",
+        status: "failure",
+        error: err,
+        payload: { stage: "scheduled" },
+      });
     }
   }
 
@@ -744,8 +1014,23 @@ export async function confirmSessionDate(
       text: conf.text,
     });
     await sendMessage(booking.id, "email", "outbound", conf.text, "session_confirmation");
+    await recordIntegrationLog({
+      bookingId,
+      provider: "email",
+      action: "email.send_session_confirmation",
+      status: "success",
+      payload: { to: booking.client.email },
+    });
   } catch (err) {
     console.error("Session confirmation email failed", err);
+    await recordIntegrationLog({
+      bookingId,
+      provider: "email",
+      action: "email.send_session_confirmation",
+      status: "failure",
+      error: err,
+      payload: { to: booking.client.email },
+    });
   }
 
   await logAudit(bookingId, actorId ?? null, "session.confirmed", null, {
@@ -785,8 +1070,23 @@ export async function sendConsentForm(bookingId: string, formUrl: string) {
   try {
     await sendWhatsAppText(booking.client.phone, whatsappText);
     await sendMessage(booking.id, "whatsapp", "outbound", whatsappText, "consent_form");
+    await recordIntegrationLog({
+      bookingId,
+      provider: "whatsapp",
+      action: "whatsapp.send_consent_form",
+      status: "success",
+      payload: { phone: booking.client.phone },
+    });
   } catch (err) {
     console.error(err);
+    await recordIntegrationLog({
+      bookingId,
+      provider: "whatsapp",
+      action: "whatsapp.send_consent_form",
+      status: "failure",
+      error: err,
+      payload: { phone: booking.client.phone },
+    });
   }
 
   await logAudit(bookingId, null, "consent.sent", null, { formUrl });
@@ -825,8 +1125,23 @@ export async function signConsentForm(
   if (booking.hubspotDealId) {
     try {
       await addNote(booking.hubspotDealId, "Consent form signed");
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "deal.add_note",
+        status: "success",
+        payload: { note: "Consent form signed" },
+      });
     } catch (err) {
       console.error(err);
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "deal.add_note",
+        status: "failure",
+        error: err,
+        payload: { note: "Consent form signed" },
+      });
     }
   }
 
@@ -886,8 +1201,23 @@ export async function markSessionComplete(
       await updateDealStage(booking.hubspotDealId, HUBSPOT_STAGE_MAP.session_complete, {
         session_duration: String(durationMinutes),
       });
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "deal.stage_update",
+        status: "success",
+        payload: { stage: "session_complete", sessionDuration: durationMinutes },
+      });
     } catch (err) {
       console.error(err);
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "deal.stage_update",
+        status: "failure",
+        error: err,
+        payload: { stage: "session_complete", sessionDuration: durationMinutes },
+      });
     }
   }
 
@@ -900,8 +1230,23 @@ export async function markSessionComplete(
       text: aftercare.text,
     });
     await sendMessage(booking.id, "email", "outbound", aftercare.text, "aftercare");
+    await recordIntegrationLog({
+      bookingId,
+      provider: "email",
+      action: "email.send_aftercare",
+      status: "success",
+      payload: { to: booking.client.email },
+    });
   } catch (err) {
     console.error("Aftercare email failed", err);
+    await recordIntegrationLog({
+      bookingId,
+      provider: "email",
+      action: "email.send_aftercare",
+      status: "failure",
+      error: err,
+      payload: { to: booking.client.email },
+    });
   }
 
   await logAudit(bookingId, actorId ?? null, "session.completed", null, {
@@ -935,17 +1280,37 @@ export async function createBalancePaymentLink(
     };
   }
 
-  const link = await createPaymentLink({
-    amount,
-    referenceId: bookingId,
-    description: `Balance for ${booking.serviceType}`,
-    customer: {
-      name: booking.client.name,
-      email: booking.client.email,
-      contact: booking.client.phone,
-    },
-    expirySeconds: 7 * 24 * 3600,
-  });
+  let link;
+  try {
+    link = await createPaymentLink({
+      amount,
+      referenceId: bookingId,
+      description: `Balance for ${booking.serviceType}`,
+      customer: {
+        name: booking.client.name,
+        email: booking.client.email,
+        contact: booking.client.phone,
+      },
+      expirySeconds: 7 * 24 * 3600,
+    });
+    await recordIntegrationLog({
+      bookingId,
+      provider: "razorpay",
+      action: "payment_link.create_balance",
+      status: "success",
+      payload: { linkId: link.id, amount },
+    });
+  } catch (err) {
+    await recordIntegrationLog({
+      bookingId,
+      provider: "razorpay",
+      action: "payment_link.create_balance",
+      status: "failure",
+      error: err,
+      payload: { amount },
+    });
+    throw err;
+  }
 
   const paymentId = randomUUID();
   await db.insert(payments).values({
@@ -980,8 +1345,23 @@ export async function createBalancePaymentLink(
   try {
     await sendWhatsAppText(booking.client.phone, whatsappText);
     await sendMessage(booking.id, "whatsapp", "outbound", whatsappText, "balance_link");
+    await recordIntegrationLog({
+      bookingId,
+      provider: "whatsapp",
+      action: "whatsapp.send_balance_link",
+      status: "success",
+      payload: { phone: booking.client.phone },
+    });
   } catch (err) {
     console.error(err);
+    await recordIntegrationLog({
+      bookingId,
+      provider: "whatsapp",
+      action: "whatsapp.send_balance_link",
+      status: "failure",
+      error: err,
+      payload: { phone: booking.client.phone },
+    });
   }
   try {
     await sendEmail({
@@ -991,8 +1371,23 @@ export async function createBalancePaymentLink(
       text: emailTpl.text,
     });
     await sendMessage(booking.id, "email", "outbound", emailTpl.text, "balance_link");
+    await recordIntegrationLog({
+      bookingId,
+      provider: "email",
+      action: "email.send_balance_link",
+      status: "success",
+      payload: { to: booking.client.email },
+    });
   } catch (err) {
     console.error(err);
+    await recordIntegrationLog({
+      bookingId,
+      provider: "email",
+      action: "email.send_balance_link",
+      status: "failure",
+      error: err,
+      payload: { to: booking.client.email },
+    });
   }
 
   await logAudit(bookingId, actorId ?? null, "balance.link_created", null, {
@@ -1028,8 +1423,23 @@ export async function sendHealedPhotoFollowUp(bookingId: string, actorId?: strin
   try {
     await sendWhatsAppText(booking.client.phone, whatsappText);
     await sendMessage(booking.id, "whatsapp", "outbound", whatsappText, "healed_photo_request");
+    await recordIntegrationLog({
+      bookingId,
+      provider: "whatsapp",
+      action: "whatsapp.send_healed_photo_followup",
+      status: "success",
+      payload: { phone: booking.client.phone },
+    });
   } catch (err) {
     console.error(err);
+    await recordIntegrationLog({
+      bookingId,
+      provider: "whatsapp",
+      action: "whatsapp.send_healed_photo_followup",
+      status: "failure",
+      error: err,
+      payload: { phone: booking.client.phone },
+    });
   }
 
   await db
@@ -1070,8 +1480,23 @@ export async function submitFeedback(
         booking.hubspotDealId,
         `Low rating alert (${rating}/5). Client Feedback: ${feedback ?? "None provided"}`
       );
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "deal.add_low_rating_note",
+        status: "success",
+        payload: { rating },
+      });
     } catch (err) {
       console.error(err);
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "deal.add_low_rating_note",
+        status: "failure",
+        error: err,
+        payload: { rating },
+      });
     }
   }
 
@@ -1081,8 +1506,23 @@ export async function submitFeedback(
         booking.hubspotDealId,
         `Healed photo submitted by client: ${healedPhotoUrl}`
       );
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "deal.add_healed_photo_note",
+        status: "success",
+        payload: { healedPhotoUrl },
+      });
     } catch (err) {
       console.error(err);
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "deal.add_healed_photo_note",
+        status: "failure",
+        error: err,
+        payload: { healedPhotoUrl },
+      });
     }
   }
 
@@ -1154,8 +1594,21 @@ export async function logInboundMessage(
   if (booking?.hubspotDealId) {
     try {
       await logMessage(booking.client.hubspotContactId ?? "", content, "inbound");
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "message.log_inbound",
+        status: "success",
+      });
     } catch (err) {
       console.error(err);
+      await recordIntegrationLog({
+        bookingId,
+        provider: "hubspot",
+        action: "message.log_inbound",
+        status: "failure",
+        error: err,
+      });
     }
   }
   await logAudit(bookingId, null, "whatsapp.inbound", null, { from, content });
