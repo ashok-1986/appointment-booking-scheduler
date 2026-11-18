@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBooking, submitFeedback } from "@/lib/workflows";
-import { jsonError } from "@/lib/route-utils";
+import { jsonError, jsonOk } from "@/lib/route-utils";
 
 export async function GET(
   req: NextRequest,
@@ -12,10 +12,21 @@ export async function GET(
     if (!booking) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    return NextResponse.json({
+    const safeClient = booking.client
+      ? {
+          name: booking.client.name,
+          email: booking.client.email,
+        }
+      : null;
+    return jsonOk({
+      ok: true,
       booking: {
-        client: booking.client,
+        id: booking.id,
+        client: safeClient,
         serviceType: booking.serviceType,
+        completedAt: booking.completedAt,
+        followUpRating: booking.followUpRating,
+        followUpFeedback: booking.followUpFeedback,
       },
     });
   } catch (err) {
@@ -33,7 +44,7 @@ export async function POST(
     const rating = Number(body.rating);
     if (!rating || rating < 1 || rating > 5) {
       return NextResponse.json(
-        { ok: false, error: "Rating must be 1-5" },
+        { ok: false, error: "Rating must be between 1 and 5" },
         { status: 400 }
       );
     }
@@ -46,7 +57,7 @@ export async function POST(
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
     }
-    return NextResponse.json({ ok: true, lowRating: result.lowRating });
+    return jsonOk({ ok: true, lowRating: result.lowRating });
   } catch (err) {
     return jsonError(err);
   }

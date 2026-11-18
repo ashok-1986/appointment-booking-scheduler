@@ -70,9 +70,9 @@ export default async function DashboardOverviewPage() {
     (b) => b.stage === "session_complete" || b.stage === "follow_up_completed"
   );
 
-  // Sum pending deposits in INR
+  // Sum pending deposits in INR (only actual configured deposits)
   const pendingDepositSumPaise = pendingDeposits.reduce((acc, b) => {
-    return acc + Number(b.depositAmount || BigInt(500000));
+    return acc + (b.depositAmount ? Number(b.depositAmount) : 0);
   }, 0);
   const pendingDepositSumINR = Math.round(pendingDepositSumPaise / 100);
 

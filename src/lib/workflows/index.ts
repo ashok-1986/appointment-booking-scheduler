@@ -392,7 +392,7 @@ export type RazorpayWebhookEvent = {
   contains: string[];
   payload: {
     payment: { entity: { id: string; amount: number; currency: string; status: string; order_id?: string; method?: string; created_at: number } };
-    payment_link?: { entity: { id: string; reference_id?: string; status: string } };
+    payment_link?: { entity: { id: string; reference_id?: string; status: string; description?: string } };
   };
 };
 
@@ -434,62 +434,168 @@ export async function handleRazorpayWebhook(
   });
   if (!booking) return { ok: true };
 
-  const paymentId = randomUUID();
-  await db.insert(payments).values({
-    id: paymentId,
-    bookingId: booking.id,
-    type: "deposit",
-    amount: BigInt(payment.amount),
-    currency: payment.currency,
-    status: "paid",
-    provider: "razorpay",
-    providerRef: payment.id,
-    providerPaymentId: payment.id,
-    paymentMethod: payment.method,
-    paidAt: new Date(payment.created_at * 1000),
-    webhookPayload: event.payload as unknown as Record<string, unknown>,
-  });
-
-  await db
-    .update(bookings)
-    .set({ stage: "deposit_paid", depositPaidAt: new Date() })
-    .where(eq(bookings.id, booking.id));
-
-  if (booking.hubspotDealId) {
-    try {
-      await updateDealStage(booking.hubspotDealId, HUBSPOT_STAGE_MAP.deposit_paid, {
-        amount: String(payment.amount),
-        deposit_transaction_id: payment.id,
-      });
-    } catch (err) {
-      console.error(err);
+  // Look for pre-created pending payment matching this payment link
+  let matchedPendingPayment = null;
+  if (paymentLink?.id) {
+    const matched = await db
+      .select()
+      .from(payments)
+      .where(
+        and(
+          eq(payments.providerRef, paymentLink.id),
+          eq(payments.bookingId, booking.id)
+        )
+      );
+    if (matched.length > 0) {
+      matchedPendingPayment = matched[0];
     }
   }
 
-  const receipt = EMAIL_TEMPLATES.paymentReceipt(
-    booking.client.name,
-    payment.amount,
-    payment.currency,
-    payment.id,
-    "deposit"
-  );
-  try {
-    await sendEmail({
-      to: booking.client.email,
-      subject: receipt.subject,
-      html: receipt.html,
-      text: receipt.text,
+  const isBalancePayment =
+    matchedPendingPayment?.type === "balance" ||
+    booking.stage === "payment_pending" ||
+    Boolean(
+      paymentLink?.description &&
+        paymentLink.description.toLowerCase().includes("balance")
+    );
+
+  const paymentType: "deposit" | "balance" = isBalancePayment ? "balance" : "deposit";
+  const paymentId = matchedPendingPayment?.id || randomUUID();
+  const paymentDate = new Date(payment.created_at * 1000);
+
+  if (matchedPendingPayment) {
+    await db
+      .update(payments)
+      .set({
+        status: "paid",
+        providerPaymentId: payment.id,
+        paymentMethod: payment.method,
+        paidAt: paymentDate,
+        webhookPayload: event.payload as unknown as Record<string, unknown>,
+      })
+      .where(eq(payments.id, matchedPendingPayment.id));
+  } else {
+    await db.insert(payments).values({
+      id: paymentId,
+      bookingId: booking.id,
+      type: paymentType,
+      amount: BigInt(payment.amount),
+      currency: payment.currency,
+      status: "paid",
+      provider: "razorpay",
+      providerRef: payment.id,
+      providerPaymentId: payment.id,
+      paymentMethod: payment.method,
+      paidAt: paymentDate,
+      webhookPayload: event.payload as unknown as Record<string, unknown>,
     });
-    await sendMessage(booking.id, "email", "outbound", receipt.text, "deposit_receipt");
-  } catch (err) {
-    console.error("Receipt email failed", err);
   }
 
-  await logAudit(booking.id, null, "deposit.paid", null, {
-    paymentId,
-    razorpayPaymentId: payment.id,
-    amount: payment.amount,
-  });
+  if (isBalancePayment) {
+    // Balance payment handling
+    await db
+      .update(bookings)
+      .set({
+        stage: "closed_followup",
+        balancePaidAt: new Date(),
+        completedAt: booking.completedAt || new Date(),
+      })
+      .where(eq(bookings.id, booking.id));
+
+    if (booking.hubspotDealId) {
+      try {
+        await updateDealStage(booking.hubspotDealId, HUBSPOT_STAGE_MAP.paid_in_full || "closedwon", {
+          amount: String(payment.amount),
+          balance_transaction_id: payment.id,
+        });
+      } catch (err) {
+        console.error("HubSpot deal update failed (balance):", err);
+      }
+    }
+
+    const receipt = EMAIL_TEMPLATES.paymentReceipt(
+      booking.client.name,
+      payment.amount,
+      payment.currency,
+      payment.id,
+      "balance"
+    );
+    try {
+      await sendEmail({
+        to: booking.client.email,
+        subject: receipt.subject,
+        html: receipt.html,
+        text: receipt.text,
+      });
+      await sendMessage(booking.id, "email", "outbound", receipt.text, "balance_receipt");
+    } catch (err) {
+      console.error("Receipt email failed (balance):", err);
+    }
+
+    await logAudit(booking.id, null, "balance.paid", null, {
+      paymentId,
+      razorpayPaymentId: payment.id,
+      amount: payment.amount,
+    });
+  } else {
+    // Deposit payment handling with stage monotonicity protection
+    const preDepositStages = [
+      "enquiry",
+      "new_enquiry",
+      "consultation",
+      "in_consultation",
+      "consultation_review",
+      "deposit_pending",
+      "deposit_requested",
+    ];
+    const shouldAdvanceStage = preDepositStages.includes(booking.stage);
+
+    await db
+      .update(bookings)
+      .set({
+        ...(shouldAdvanceStage ? { stage: "deposit_paid" } : {}),
+        depositPaidAt: booking.depositPaidAt || new Date(),
+        depositAmount: booking.depositAmount || BigInt(payment.amount),
+      })
+      .where(eq(bookings.id, booking.id));
+
+    if (booking.hubspotDealId && shouldAdvanceStage) {
+      try {
+        await updateDealStage(booking.hubspotDealId, HUBSPOT_STAGE_MAP.deposit_paid, {
+          amount: String(payment.amount),
+          deposit_transaction_id: payment.id,
+        });
+      } catch (err) {
+        console.error("HubSpot deal update failed (deposit):", err);
+      }
+    }
+
+    const receipt = EMAIL_TEMPLATES.paymentReceipt(
+      booking.client.name,
+      payment.amount,
+      payment.currency,
+      payment.id,
+      "deposit"
+    );
+    try {
+      await sendEmail({
+        to: booking.client.email,
+        subject: receipt.subject,
+        html: receipt.html,
+        text: receipt.text,
+      });
+      await sendMessage(booking.id, "email", "outbound", receipt.text, "deposit_receipt");
+    } catch (err) {
+      console.error("Receipt email failed (deposit):", err);
+    }
+
+    await logAudit(booking.id, null, "deposit.paid", null, {
+      paymentId,
+      razorpayPaymentId: payment.id,
+      amount: payment.amount,
+      stageAdvanced: shouldAdvanceStage,
+    });
+  }
 
   return { ok: true };
 }
@@ -786,7 +892,7 @@ export async function createBalancePaymentLink(
 
   await db
     .update(bookings)
-    .set({ stage: "deposit_paid", balanceAmount: BigInt(amount) })
+    .set({ stage: "payment_pending", balanceAmount: BigInt(amount) })
     .where(eq(bookings.id, bookingId));
 
   const whatsappText = buildPaymentLinkMessage(
