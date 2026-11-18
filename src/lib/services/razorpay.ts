@@ -109,7 +109,7 @@ export async function fetchPayment(paymentId: string): Promise<Payment> {
 export async function fetchPaymentLink(
   linkId: string
 ): Promise<PaymentLink & { payments?: Payment[] }> {
-  return request(`${BASE_URL}/payment_links/${linkId}` as unknown as string);
+  return request<PaymentLink & { payments?: Payment[] }>(`/payment_links/${linkId}`);
 }
 
 /** Verify Razorpay webhook signature (HMAC-SHA256 of raw body). */

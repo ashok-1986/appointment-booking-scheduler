@@ -1,4 +1,5 @@
 import "dotenv/config";
+import crypto from "crypto";
 
 const GRAPH_URL = "https://graph.facebook.com/v18.0";
 
@@ -115,4 +116,37 @@ export function buildPaymentLinkMessage(
     `Hi ${clientName}, your ${kind} payment of ${formatted} is ready. ` +
     `Pay securely here: ${linkUrl}`
   );
+}
+
+/**
+ * Verifies a WhatsApp / Meta webhook payload signature (X-Hub-Signature-256).
+ * Uses constant-time comparison to prevent timing attacks.
+ */
+export function verifyWhatsAppWebhookSignature(
+  rawBody: string,
+  signatureHeader: string | null | undefined,
+  appSecret: string
+): boolean {
+  if (!signatureHeader || !appSecret || !rawBody) {
+    return false;
+  }
+
+  // Format: "sha256=<hash>" or bare "<hash>"
+  const signature = signatureHeader.startsWith("sha256=")
+    ? signatureHeader.slice(7)
+    : signatureHeader;
+
+  if (!signature || signature.length !== 64) {
+    return false;
+  }
+
+  const expected = crypto
+    .createHmac("sha256", appSecret)
+    .update(rawBody)
+    .digest("hex");
+
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(signature, "utf8");
+
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }

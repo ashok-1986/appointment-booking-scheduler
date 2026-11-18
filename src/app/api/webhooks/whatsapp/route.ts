@@ -1,19 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logInboundMessage } from "@/lib/workflows";
 import { db } from "@/lib/db";
-import { bookings, clients } from "@/lib/schema";
-import { eq } from "drizzle-orm";
+import { bookings, clients, messages } from "@/lib/schema";
+import { eq, desc } from "drizzle-orm";
+import { verifyWhatsAppWebhookSignature } from "@/lib/services/whatsapp";
 
-const VERIFY_TOKEN =
-  process.env.WHATSAPP_VERIFY_TOKEN ??
-  process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN ??
-  "dev-token";
+function getVerifyToken(): string | null {
+  const token =
+    process.env.WHATSAPP_VERIFY_TOKEN ||
+    process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+  if (token) return token;
+  if (process.env.NODE_ENV !== "production") {
+    return "dev-token";
+  }
+  return null;
+}
 
 export async function GET(req: NextRequest) {
   const mode = req.nextUrl.searchParams.get("hub.mode");
   const token = req.nextUrl.searchParams.get("hub.verify_token");
   const challenge = req.nextUrl.searchParams.get("hub.challenge");
-  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+
+  const expectedToken = getVerifyToken();
+  if (!expectedToken) {
+    console.error("WhatsApp verify token is not configured in environment");
+    return new NextResponse("Webhook verification not configured", { status: 500 });
+  }
+
+  if (mode === "subscribe" && token === expectedToken) {
     return new NextResponse(challenge ?? "", { status: 200 });
   }
   return new NextResponse("Forbidden", { status: 403 });
@@ -21,7 +35,29 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const rawBody = await req.text();
+    const signature =
+      req.headers.get("x-hub-signature-256") ||
+      req.headers.get("X-Hub-Signature-256");
+
+    const appSecret =
+      process.env.WHATSAPP_APP_SECRET ||
+      process.env.META_APP_SECRET;
+
+    if (appSecret) {
+      if (!verifyWhatsAppWebhookSignature(rawBody, signature, appSecret)) {
+        console.warn("Invalid WhatsApp webhook signature received");
+        return NextResponse.json({ ok: false, error: "Invalid signature" }, { status: 401 });
+      }
+    } else if (process.env.NODE_ENV === "production") {
+      console.error("WHATSAPP_APP_SECRET is not configured in production");
+      return NextResponse.json(
+        { ok: false, error: "Webhook signature secret is not configured" },
+        { status: 500 }
+      );
+    }
+
+    const body = JSON.parse(rawBody);
     const entry = body.entry?.[0];
     const change = entry?.changes?.[0];
     const message = change?.value?.messages?.[0];
@@ -35,8 +71,10 @@ export async function POST(req: NextRequest) {
         where: eq(clients.phone, from),
       });
       if (client) {
+        // Select the active or most recent booking for this client
         const booking = await db.query.bookings.findFirst({
           where: eq(bookings.clientId, client.id),
+          orderBy: [desc(bookings.createdAt)],
         });
         if (booking) {
           await logInboundMessage(booking.id, text, from);
@@ -46,7 +84,6 @@ export async function POST(req: NextRequest) {
 
     if (status) {
       // Update delivery status on the message row
-      const { messages } = await import("@/lib/schema");
       await db
         .update(messages)
         .set({ deliveryStatus: status.status })

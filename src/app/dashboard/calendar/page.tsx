@@ -29,90 +29,17 @@ import {
   Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-
-type ViewMode = "month" | "week" | "day" | "agenda";
-
-type SessionItem = {
-  id: string;
-  bookingId: string;
-  sessionNumber: number;
-  scheduledStart: string;
-  scheduledEnd: string;
-  durationMinutes: number;
-  status: "scheduled" | "in_progress" | "completed" | "cancelled" | "rescheduled" | string;
-  notes: string | null;
-  consentStatus: "not_started" | "sent" | "signed" | "overridden" | string;
-  overrideReason?: string | null;
-  client: {
-    id: string;
-    name: string;
-    email: string;
-    phone: string;
-    instagramHandle: string | null;
-  };
-  booking: {
-    id: string;
-    serviceType: string;
-    designDescription: string | null;
-    placement: string | null;
-    approximateSize: string | null;
-    quotedAmount: string | null;
-    stage: string;
-  };
-};
-
-type ClientOption = {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  instagramHandle: string | null;
-};
-
-const DURATION_PRESETS = [
-  { label: "1 hour", value: 60 },
-  { label: "2 hours", value: 120 },
-  { label: "3 hours (Standard)", value: 180 },
-  { label: "4 hours (Half Day)", value: 240 },
-  { label: "6 hours (Full Day)", value: 360 },
-];
-
-const TIME_SLOTS = [
-  "09:00",
-  "10:00",
-  "11:00",
-  "12:00",
-  "13:00",
-  "14:00",
-  "15:00",
-  "16:00",
-  "17:00",
-  "18:00",
-  "19:00",
-  "20:00",
-];
-
-const SERVICE_TYPES = [
-  "Tattoo",
-  "Cover Up",
-  "Touch-up",
-  "Commission Artwork",
-  "Consultation",
-];
+import {
+  ViewMode,
+  SessionItem,
+  ClientOption,
+  TIME_SLOTS,
+} from "@/components/dashboard/calendar/types";
+import { StatusBadge, ConsentBadge } from "@/components/dashboard/calendar/status-badges";
+import { AppointmentModal } from "@/components/dashboard/calendar/appointment-modal";
+import { SessionDetailsModal } from "@/components/dashboard/calendar/session-details-modal";
+import { WhatsAppConfirmationModal } from "@/components/dashboard/calendar/whatsapp-modal";
 
 export default function CalendarPage() {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
@@ -532,74 +459,12 @@ export default function CalendarPage() {
   }
 
   // Status Badge Helper
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "scheduled":
-        return (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#C4FF61]/20 text-[#1A1A1A] dark:text-[#C4FF61] border border-[#C4FF61]/40">
-            Scheduled
-          </span>
-        );
-      case "in_progress":
-        return (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30 animate-pulse">
-            In Progress
-          </span>
-        );
-      case "completed":
-        return (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-            Completed
-          </span>
-        );
-      case "cancelled":
-        return (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30 line-through">
-            Cancelled
-          </span>
-        );
-      default:
-        return (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-            {status}
-          </span>
-        );
-    }
-  };
+  const getStatusBadge = (status: string) => <StatusBadge status={status} />;
 
   // Consent Status Badge Helper
-  const getConsentBadge = (consentStatus: string) => {
-    switch (consentStatus) {
-      case "signed":
-        return (
-          <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-            <ShieldCheck className="h-3 w-3" />
-            <span>Consent Signed</span>
-          </span>
-        );
-      case "sent":
-        return (
-          <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-            <Clock className="h-3 w-3" />
-            <span>Form Sent</span>
-          </span>
-        );
-      case "overridden":
-        return (
-          <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-            <ShieldAlert className="h-3 w-3" />
-            <span>Overridden</span>
-          </span>
-        );
-      default:
-        return (
-          <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
-            <AlertCircle className="h-3 w-3 text-amber-500" />
-            <span>Consent Pending</span>
-          </span>
-        );
-    }
-  };
+  const getConsentBadge = (consentStatus: string) => (
+    <ConsentBadge consentStatus={consentStatus} />
+  );
 
   return (
     <div className="space-y-6 font-sans pb-16">
@@ -1218,505 +1083,57 @@ export default function CalendarPage() {
       )}
 
       {/* ==================== NEW APPOINTMENT MODAL ==================== */}
-      <Dialog open={modalOpen} onOpenChange={(open) => !isSubmitting && setModalOpen(open)}>
-        <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-serif font-light text-foreground flex items-center gap-2">
-              <CalendarIcon className="h-6 w-6 text-[#1A1A1A] dark:text-[#C4FF61]" />
-              <span>Artist Appointment Booking</span>
-            </DialogTitle>
-          </DialogHeader>
-
-          <form onSubmit={handleCreateAppointment} className="space-y-5 pt-2">
-            {/* Conflict Warning Box */}
-            {detectedConflict && (
-              <div className="p-3.5 rounded-xl border border-amber-300 bg-amber-500/10 text-amber-900 dark:text-amber-200 flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-xs font-semibold">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0" />
-                  <span>Scheduling Conflict Detected!</span>
-                </div>
-                <p className="text-xs font-light">
-                  This slot overlaps with an existing appointment for{" "}
-                  <strong>{detectedConflict.client.name}</strong> (
-                  {new Date(detectedConflict.scheduledStart).toLocaleTimeString([], {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}{" "}
-                  to{" "}
-                  {new Date(detectedConflict.scheduledEnd).toLocaleTimeString([], {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                  ).
-                </p>
-                <div className="flex items-center gap-2 pt-1">
-                  <Switch
-                    id="allow-overlap"
-                    checked={allowOverlap}
-                    onCheckedChange={setAllowOverlap}
-                  />
-                  <Label htmlFor="allow-overlap" className="text-xs font-medium cursor-pointer">
-                    Override conflict & schedule anyway (intentional overlap)
-                  </Label>
-                </div>
-              </div>
-            )}
-
-            {/* Client Selector (Existing vs New) */}
-            <div className="space-y-3 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Client Selection
-                </Label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsNewClient(false)}
-                    className={`text-xs px-2.5 py-1 rounded-md transition-all ${
-                      !isNewClient
-                        ? "bg-[#1A1A1A] text-white dark:bg-[#FDFFE9] dark:text-[#1A1A1A] font-medium"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Existing Client
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsNewClient(true)}
-                    className={`text-xs px-2.5 py-1 rounded-md transition-all ${
-                      isNewClient
-                        ? "bg-[#1A1A1A] text-white dark:bg-[#FDFFE9] dark:text-[#1A1A1A] font-medium"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    + New Client
-                  </button>
-                </div>
-              </div>
-
-              {!isNewClient ? (
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Select Client</Label>
-                  <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                    <SelectTrigger className="h-9 text-xs bg-background">
-                      <SelectValue placeholder="Choose client from database" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name} ({c.phone})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium">
-                      Full Name <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      required
-                      placeholder="e.g. Maya Rao"
-                      value={newClientName}
-                      onChange={(e) => setNewClientName(e.target.value)}
-                      className="h-8 text-xs bg-background"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium">
-                      Phone Number <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      required
-                      placeholder="e.g. +91 98765 43210"
-                      value={newClientPhone}
-                      onChange={(e) => setNewClientPhone(e.target.value)}
-                      className="h-8 text-xs bg-background"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium">
-                      Email Address <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      required
-                      type="email"
-                      placeholder="e.g. maya@example.com"
-                      value={newClientEmail}
-                      onChange={(e) => setNewClientEmail(e.target.value)}
-                      className="h-8 text-xs bg-background"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium">Instagram Handle (Optional)</Label>
-                    <Input
-                      placeholder="e.g. @maya.ink"
-                      value={newClientInstagram}
-                      onChange={(e) => setNewClientInstagram(e.target.value)}
-                      className="h-8 text-xs bg-background"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Date, Time & Duration */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">
-                  Date <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  type="date"
-                  required
-                  value={appointmentDate}
-                  onChange={(e) => setAppointmentDate(e.target.value)}
-                  className="h-9 text-xs"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">
-                  Start Time <span className="text-red-500">*</span>
-                </Label>
-                <Select value={appointmentTime} onValueChange={setAppointmentTime}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Pick start time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIME_SLOTS.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Duration</Label>
-                <Select
-                  value={String(appointmentDuration)}
-                  onValueChange={(val) => setAppointmentDuration(Number(val))}
-                >
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select duration" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DURATION_PRESETS.map((p) => (
-                      <SelectItem key={p.value} value={String(p.value)}>
-                        {p.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Service & Placement */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Service Type</Label>
-                <Select value={serviceType} onValueChange={setServiceType}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SERVICE_TYPES.map((st) => (
-                      <SelectItem key={st} value={st}>
-                        {st}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Anatomical Placement</Label>
-                <Input
-                  placeholder="e.g. Left Inner Forearm, Ribcage, Collarbone"
-                  value={placement}
-                  onChange={(e) => setPlacement(e.target.value)}
-                  className="h-9 text-xs"
-                />
-              </div>
-            </div>
-
-            {/* Tattoo Description & Placement Notes */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Tattoo Description & Design Notes</Label>
-              <Textarea
-                placeholder="e.g. Fine line botanical floral branch with micro-shading. 2.5 inches."
-                value={designDescription}
-                onChange={(e) => setDesignDescription(e.target.value)}
-                rows={2}
-                className="text-xs resize-none"
-              />
-            </div>
-
-            {/* Studio / Session Notes */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">
-                Studio Prep Notes (Internal)
-              </Label>
-              <Input
-                placeholder="e.g. Client requested 15 min numbing cream before needle pass."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="h-8 text-xs"
-              />
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setModalOpen(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={isSubmitting || (!!detectedConflict && !allowOverlap)}
-                className="bg-[#C4FF61] text-[#1A1A1A] hover:bg-[#b2f04b] font-medium gap-2 min-w-[140px]"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Scheduling...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>Schedule Appointment</span>
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <AppointmentModal
+        open={modalOpen}
+        onOpenChange={(open) => !isSubmitting && setModalOpen(open)}
+        isSubmitting={isSubmitting}
+        clients={clients}
+        detectedConflict={detectedConflict}
+        allowOverlap={allowOverlap}
+        setAllowOverlap={setAllowOverlap}
+        isNewClient={isNewClient}
+        setIsNewClient={setIsNewClient}
+        selectedClientId={selectedClientId}
+        setSelectedClientId={setSelectedClientId}
+        newClientName={newClientName}
+        setNewClientName={setNewClientName}
+        newClientEmail={newClientEmail}
+        setNewClientEmail={setNewClientEmail}
+        newClientPhone={newClientPhone}
+        setNewClientPhone={setNewClientPhone}
+        newClientInstagram={newClientInstagram}
+        setNewClientInstagram={setNewClientInstagram}
+        appointmentDate={appointmentDate}
+        setAppointmentDate={setAppointmentDate}
+        appointmentTime={appointmentTime}
+        setAppointmentTime={setAppointmentTime}
+        appointmentDuration={appointmentDuration}
+        setAppointmentDuration={setAppointmentDuration}
+        serviceType={serviceType}
+        setServiceType={setServiceType}
+        placement={placement}
+        setPlacement={setPlacement}
+        designDescription={designDescription}
+        setDesignDescription={setDesignDescription}
+        notes={notes}
+        setNotes={setNotes}
+        onSubmit={handleCreateAppointment}
+      />
 
       {/* ==================== SESSION DETAILS MODAL ==================== */}
-      {selectedSession && (
-        <Dialog open={!!selectedSession} onOpenChange={(open) => !open && setSelectedSession(null)}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-serif font-light text-foreground flex items-center justify-between">
-                <span>Session Details</span>
-                {getStatusBadge(selectedSession.status)}
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-4 pt-2">
-              {/* Client Info */}
-              <div className="p-3.5 rounded-xl border bg-zinc-50/50 dark:bg-zinc-900/40 space-y-1.5">
-                <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
-                  Client Information
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className="text-base font-serif font-medium text-foreground">
-                    {selectedSession.client.name}
-                  </span>
-                  {selectedSession.client.instagramHandle && (
-                    <span className="text-xs text-[#C4FF61] font-mono">
-                      @{selectedSession.client.instagramHandle.replace("@", "")}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Phone className="h-3 w-3" />
-                    {selectedSession.client.phone}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Mail className="h-3 w-3" />
-                    {selectedSession.client.email}
-                  </span>
-                </div>
-              </div>
-
-              {/* Time & Service */}
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 rounded-xl border bg-card">
-                  <span className="text-muted-foreground text-[11px]">Date & Time</span>
-                  <p className="font-medium text-foreground mt-0.5">
-                    {new Date(selectedSession.scheduledStart).toLocaleDateString("en-IN", {
-                      weekday: "short",
-                      day: "numeric",
-                      month: "short",
-                    })}
-                  </p>
-                  <p className="text-muted-foreground text-[11px] font-mono">
-                    {new Date(selectedSession.scheduledStart).toLocaleTimeString([], {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}{" "}
-                    to{" "}
-                    {new Date(selectedSession.scheduledEnd).toLocaleTimeString([], {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-xl border bg-card">
-                  <span className="text-muted-foreground text-[11px]">Service & Placement</span>
-                  <p className="font-medium text-foreground mt-0.5">
-                    {selectedSession.booking.serviceType}
-                  </p>
-                  <p className="text-muted-foreground text-[11px]">
-                    {selectedSession.booking.placement || "General"}
-                  </p>
-                </div>
-              </div>
-
-              {/* Consent Status */}
-              <div className="p-3 rounded-xl border bg-card flex items-center justify-between">
-                <div>
-                  <span className="text-muted-foreground text-[11px]">Consent Status</span>
-                  <div className="mt-1">{getConsentBadge(selectedSession.consentStatus)}</div>
-                </div>
-                {selectedSession.consentStatus !== "signed" && (
-                  <span className="text-[11px] text-amber-600 dark:text-amber-400 font-light">
-                    Requires signature before session
-                  </span>
-                )}
-              </div>
-
-              {/* Notes */}
-              {(selectedSession.booking.designDescription || selectedSession.notes) && (
-                <div className="p-3 rounded-xl border bg-card space-y-1 text-xs">
-                  <span className="text-muted-foreground text-[11px]">Notes & Description</span>
-                  {selectedSession.booking.designDescription && (
-                    <p className="text-foreground font-light">
-                      {selectedSession.booking.designDescription}
-                    </p>
-                  )}
-                  {selectedSession.notes && (
-                    <p className="text-zinc-500 italic pt-1">
-                      Studio Note: {selectedSession.notes}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Status Update Actions */}
-              <div className="space-y-2 pt-2 border-t">
-                <Label className="text-xs font-medium">Update Session Status</Label>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleUpdateStatus(selectedSession.id, "in_progress")}
-                    disabled={selectedSession.status === "in_progress"}
-                    className="text-xs"
-                  >
-                    Mark In-Progress
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleUpdateStatus(selectedSession.id, "completed")}
-                    disabled={selectedSession.status === "completed"}
-                    className="text-xs text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800"
-                  >
-                    Mark Completed
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleUpdateStatus(selectedSession.id, "cancelled")}
-                    disabled={selectedSession.status === "cancelled"}
-                    className="text-xs text-red-600 dark:text-red-400 border-red-200 dark:border-red-900"
-                  >
-                    Cancel Session
-                  </Button>
-                </div>
-              </div>
-
-              {/* Bottom WhatsApp Button */}
-              <div className="pt-3 border-t flex items-center justify-between">
-                <Button
-                  onClick={() => handleTriggerWhatsApp(selectedSession)}
-                  className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-medium gap-2"
-                >
-                  <MessageSquare className="h-4 w-4" />
-                  <span>Send WhatsApp Confirmation</span>
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+      <SessionDetailsModal
+        session={selectedSession}
+        onClose={() => setSelectedSession(null)}
+        onUpdateStatus={handleUpdateStatus}
+        onTriggerWhatsApp={handleTriggerWhatsApp}
+      />
 
       {/* ==================== WHATSAPP CONFIRMATION MODAL ==================== */}
-      {whatsappData && (
-        <Dialog open={whatsappModalOpen} onOpenChange={setWhatsappModalOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-serif font-light text-foreground flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-[#25D366]" />
-                <span>WhatsApp Appointment Confirmation</span>
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-4 pt-2">
-              <p className="text-xs text-muted-foreground font-light">
-                Ready to send confirmation message to{" "}
-                <strong className="text-foreground">{whatsappData.clientName}</strong> (
-                {whatsappData.phone}):
-              </p>
-
-              {/* Message Box */}
-              <div className="p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-950 bg-emerald-50/50 dark:bg-emerald-950/20 text-xs text-foreground font-mono whitespace-pre-wrap leading-relaxed">
-                {whatsappData.message}
-              </div>
-
-              {/* Actions */}
-              <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    navigator.clipboard.writeText(whatsappData.message);
-                    toast.success("Confirmation message copied to clipboard!");
-                  }}
-                  className="flex-1 gap-1.5 text-xs"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  <span>Copy Message</span>
-                </Button>
-
-                <Button
-                  size="sm"
-                  asChild
-                  className="flex-1 bg-[#25D366] hover:bg-[#20bd5a] text-white font-medium gap-1.5 text-xs"
-                >
-                  <a
-                    href={whatsappData.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setWhatsappModalOpen(false)}
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    <span>Open in WhatsApp</span>
-                  </a>
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+      <WhatsAppConfirmationModal
+        open={whatsappModalOpen}
+        onOpenChange={setWhatsappModalOpen}
+        data={whatsappData}
+      />
     </div>
   );
 }

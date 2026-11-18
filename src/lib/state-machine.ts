@@ -47,7 +47,7 @@ export const V1_ALL_STAGES = [
 export type V1BookingStage = (typeof V1_ALL_STAGES)[number];
 
 export const V1_STAGE_TRANSITIONS: Record<V1BookingStage, readonly V1BookingStage[]> = {
-  new_enquiry: ["consultation_review", "not_a_fit"],
+  new_enquiry: ["consultation_review", "deposit_pending", "not_a_fit"],
   consultation_review: ["deposit_pending", "not_a_fit"],
   deposit_pending: ["confirmed_scheduled", "not_a_fit"],
   confirmed_scheduled: ["session_completed", "cancelled"],

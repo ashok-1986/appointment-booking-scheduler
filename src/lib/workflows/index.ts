@@ -7,8 +7,9 @@ import {
   messages,
   auditLogs,
   serviceTypes,
+  users,
 } from "@/lib/schema";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, or, desc, asc } from "drizzle-orm";
 import {
   createContact,
   createDeal,
@@ -35,6 +36,7 @@ import {
   isSlotAvailable,
 } from "@/lib/services/calendar";
 import { randomUUID } from "crypto";
+import { canTransitionV1, normalizeToV1Stage } from "@/lib/state-machine";
 
 export type BookingWithClient = typeof bookings.$inferSelect & {
   client: typeof clients.$inferSelect;
@@ -109,14 +111,22 @@ export async function createEnquiry(
   input: EnquiryInput,
   artistId: string
 ): Promise<EnquiryResult> {
-  const existing = await db
-    .select()
-    .from(clients)
-    .limit(1000);
+  // 1. Resolve a valid artist ID in case the provided ID does not exist in the database
+  let validArtistId = artistId;
+  const artistExists = await db.query.users.findFirst({
+    where: eq(users.id, artistId),
+  });
+  if (!artistExists) {
+    const fallbackArtist = await db.query.users.findFirst();
+    if (fallbackArtist) {
+      validArtistId = fallbackArtist.id;
+    }
+  }
 
-  const dupClient = existing.find(
-    (c) => c.email === input.email || c.phone === input.phone
-  );
+  // 2. Perform indexed query to find matching existing client
+  const dupClient = await db.query.clients.findFirst({
+    where: or(eq(clients.email, input.email), eq(clients.phone, input.phone)),
+  });
 
   let clientId: string;
   let hubspotContactId: string | null = null;
@@ -174,7 +184,7 @@ export async function createEnquiry(
   await db.insert(bookings).values({
     id: bookingId,
     clientId,
-    artistId,
+    artistId: validArtistId,
     serviceType: input.serviceType,
     designDescription: combinedDescription || input.designDescription,
     referenceImages: input.referenceImages ?? [],
@@ -255,6 +265,15 @@ export async function updateConsultationStatus(
   const newStage =
     status === "qualified" ? "deposit_requested" : status === "not_a_fit" ? "not_a_fit" : "in_consultation";
 
+  const currentNormalized = normalizeToV1Stage(booking.stage);
+  const targetNormalized = normalizeToV1Stage(newStage);
+  if (currentNormalized !== targetNormalized && !canTransitionV1(booking.stage, newStage)) {
+    return {
+      ok: false,
+      error: `Invalid state transition from '${booking.stage}' (${currentNormalized}) to '${newStage}' (${targetNormalized})`,
+    };
+  }
+
   await db
     .update(bookings)
     .set({ stage: newStage, rejectionReason: reason ?? null })
@@ -305,6 +324,16 @@ export async function createDepositPaymentLink(
     with: { client: true },
   });
   if (!booking) return { ok: false, error: "Booking not found" };
+
+  const targetStage = "deposit_pending";
+  const currentNormalized = normalizeToV1Stage(booking.stage);
+  const targetNormalized = normalizeToV1Stage(targetStage);
+  if (currentNormalized !== targetNormalized && !canTransitionV1(booking.stage, targetStage)) {
+    return {
+      ok: false,
+      error: `Invalid state transition from '${booking.stage}' (${currentNormalized}) to '${targetStage}'`,
+    };
+  }
 
   const link = await createPaymentLink({
     amount,
@@ -420,7 +449,12 @@ export async function handleRazorpayWebhook(
   const existing = await db
     .select()
     .from(payments)
-    .where(eq(payments.providerRef, payment.id));
+    .where(
+      or(
+        eq(payments.providerRef, payment.id),
+        eq(payments.providerPaymentId, payment.id)
+      )
+    );
   if (existing.length > 0) {
     return { ok: true }; // idempotent
   }
@@ -448,6 +482,9 @@ export async function handleRazorpayWebhook(
       );
     if (matched.length > 0) {
       matchedPendingPayment = matched[0];
+      if (matchedPendingPayment.status === "paid") {
+        return { ok: true }; // already settled
+      }
     }
   }
 
@@ -655,6 +692,16 @@ export async function confirmSessionDate(
   });
   if (!booking) return { ok: false, error: "Booking not found" };
 
+  const targetStage = "scheduled";
+  const currentNormalized = normalizeToV1Stage(booking.stage);
+  const targetNormalized = normalizeToV1Stage(targetStage);
+  if (currentNormalized !== targetNormalized && !canTransitionV1(booking.stage, targetStage)) {
+    return {
+      ok: false,
+      error: `Invalid state transition from '${booking.stage}' (${currentNormalized}) to '${targetStage}'`,
+    };
+  }
+
   const event = await createSessionEvent({
     summary: `Session – ${booking.client.name} (${booking.serviceType})`,
     description: booking.designDescription ?? undefined,
@@ -802,6 +849,16 @@ export async function markSessionComplete(
   });
   if (!booking) return { ok: false, error: "Booking not found" };
 
+  const targetStage = "session_complete";
+  const currentNormalized = normalizeToV1Stage(booking.stage);
+  const targetNormalized = normalizeToV1Stage(targetStage);
+  if (currentNormalized !== targetNormalized && !canTransitionV1(booking.stage, targetStage)) {
+    return {
+      ok: false,
+      error: `Invalid state transition from '${booking.stage}' (${currentNormalized}) to '${targetStage}'`,
+    };
+  }
+
   if (!booking.consentSignedAt) {
     if (!consentOverrideReason || consentOverrideReason.trim().length === 0) {
       return {
@@ -867,6 +924,16 @@ export async function createBalancePaymentLink(
     with: { client: true },
   });
   if (!booking) return { ok: false, error: "Booking not found" };
+
+  const targetStage = "payment_pending";
+  const currentNormalized = normalizeToV1Stage(booking.stage);
+  const targetNormalized = normalizeToV1Stage(targetStage);
+  if (currentNormalized !== targetNormalized && !canTransitionV1(booking.stage, targetStage)) {
+    return {
+      ok: false,
+      error: `Invalid state transition from '${booking.stage}' (${currentNormalized}) to '${targetStage}'`,
+    };
+  }
 
   const link = await createPaymentLink({
     amount,
@@ -944,6 +1011,16 @@ export async function sendHealedPhotoFollowUp(bookingId: string, actorId?: strin
     with: { client: true },
   });
   if (!booking) return { ok: false, error: "Booking not found" };
+
+  const targetStage = "closed_followup";
+  const currentNormalized = normalizeToV1Stage(booking.stage);
+  const targetNormalized = normalizeToV1Stage(targetStage);
+  if (currentNormalized !== targetNormalized && !canTransitionV1(booking.stage, targetStage)) {
+    return {
+      ok: false,
+      error: `Invalid state transition from '${booking.stage}' (${currentNormalized}) to '${targetStage}'`,
+    };
+  }
 
   const feedbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/feedback/${bookingId}`;
   const whatsappText = `Hi ${booking.client.name}, we hope your session has healed well! Please share your healed photos and rate your experience: ${feedbackUrl}`;

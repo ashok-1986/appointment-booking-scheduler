@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { escapeHtml } from "@/lib/utils";
 
 const RESEND_URL = "https://api.resend.com/v1";
 
@@ -57,7 +58,7 @@ export const EMAIL_TEMPLATES = {
   enquiryConfirmation: (name: string) => ({
     subject: "We received your enquiry",
     text: `Hi ${name},\n\nThanks for reaching out. We've received your enquiry and will get back to you within 1 business day.\n\nBest regards,\nThe Studio`,
-    html: `<p>Hi ${name},</p><p>Thanks for reaching out. We've received your enquiry and will get back to you within <strong>1 business day</strong>.</p><p>Best regards,<br/>The Studio</p>`,
+    html: `<p>Hi ${escapeHtml(name)},</p><p>Thanks for reaching out. We've received your enquiry and will get back to you within <strong>1 business day</strong>.</p><p>Best regards,<br/>The Studio</p>`,
   }),
   depositLink: (
     name: string,
@@ -71,10 +72,13 @@ export const EMAIL_TEMPLATES = {
       currency,
       maximumFractionDigits: 0,
     }).format(amount / 100);
+    const safeName = escapeHtml(name);
+    const safeFormatted = escapeHtml(formatted);
+    const safeUrl = escapeHtml(linkUrl);
     return {
       subject: "Your deposit payment link",
       text: `Hi ${name},\n\nYour deposit of ${formatted} is due. Pay securely here: ${linkUrl}\nThis link expires in ${expiresHours} hours.`,
-      html: `<p>Hi ${name},</p><p>Your deposit of <strong>${formatted}</strong> is due. Pay securely here: <a href="${linkUrl}">${linkUrl}</a></p><p>This link expires in ${expiresHours} hours.</p>`,
+      html: `<p>Hi ${safeName},</p><p>Your deposit of <strong>${safeFormatted}</strong> is due. Pay securely here: <a href="${safeUrl}">${safeUrl}</a></p><p>This link expires in ${expiresHours} hours.</p>`,
     };
   },
   balanceLink: (
@@ -89,10 +93,13 @@ export const EMAIL_TEMPLATES = {
       currency,
       maximumFractionDigits: 0,
     }).format(amount / 100);
+    const safeName = escapeHtml(name);
+    const safeFormatted = escapeHtml(formatted);
+    const safeUrl = escapeHtml(linkUrl);
     return {
       subject: "Your balance payment link",
       text: `Hi ${name},\n\nYour remaining balance of ${formatted} is due. Pay securely here: ${linkUrl}\nThis link expires in ${expiresDays} days.`,
-      html: `<p>Hi ${name},</p><p>Your remaining balance of <strong>${formatted}</strong> is due. Pay securely here: <a href="${linkUrl}">${linkUrl}</a></p><p>This link expires in ${expiresDays} days.</p>`,
+      html: `<p>Hi ${safeName},</p><p>Your remaining balance of <strong>${safeFormatted}</strong> is due. Pay securely here: <a href="${safeUrl}">${safeUrl}</a></p><p>This link expires in ${expiresDays} days.</p>`,
     };
   },
   paymentReceipt: (
@@ -107,10 +114,14 @@ export const EMAIL_TEMPLATES = {
       currency,
       maximumFractionDigits: 0,
     }).format(amount / 100);
+    const safeName = escapeHtml(name);
+    const safeFormatted = escapeHtml(formatted);
+    const safeKind = escapeHtml(kind);
+    const safeTx = escapeHtml(transactionId);
     return {
       subject: `Payment receipt: ${kind} paid`,
       text: `Hi ${name},\n\nWe received your ${kind} payment of ${formatted}.\nTransaction ID: ${transactionId}\n\nThank you!`,
-      html: `<p>Hi ${name},</p><p>We received your ${kind} payment of <strong>${formatted}</strong>.</p><p>Transaction ID: <code>${transactionId}</code></p><p>Thank you!</p>`,
+      html: `<p>Hi ${safeName},</p><p>We received your ${safeKind} payment of <strong>${safeFormatted}</strong>.</p><p>Transaction ID: <code>${safeTx}</code></p><p>Thank you!</p>`,
     };
   },
   sessionConfirmation: (
@@ -118,30 +129,40 @@ export const EMAIL_TEMPLATES = {
     date: string,
     address: string,
     preparation: string
-  ) => ({
-    subject: "Your session is confirmed",
-    text: `Hi ${name},\n\nYour session is confirmed for ${date}.\nStudio address: ${address}\n\nPreparation:\n${preparation}`,
-    html: `<p>Hi ${name},</p><p>Your session is confirmed for <strong>${date}</strong>.</p><p>Studio address: ${address}</p><p>Preparation:</p><p>${preparation.replace(/\n/g, "<br/>")}</p>`,
-  }),
+  ) => {
+    const safeName = escapeHtml(name);
+    const safeDate = escapeHtml(date);
+    const safeAddress = escapeHtml(address);
+    const safePrep = escapeHtml(preparation).replace(/\n/g, "<br/>");
+    return {
+      subject: "Your session is confirmed",
+      text: `Hi ${name},\n\nYour session is confirmed for ${date}.\nStudio address: ${address}\n\nPreparation:\n${preparation}`,
+      html: `<p>Hi ${safeName},</p><p>Your session is confirmed for <strong>${safeDate}</strong>.</p><p>Studio address: ${safeAddress}</p><p>Preparation:</p><p>${safePrep}</p>`,
+    };
+  },
   sessionReminder: (name: string, date: string, hours: number) => ({
     subject: `Session reminder: ${hours}h before`,
     text: `Hi ${name},\n\nReminder: your session is in ${hours} hours (${date}).`,
-    html: `<p>Hi ${name},</p><p>Reminder: your session is in <strong>${hours} hours</strong> (${date}).</p>`,
+    html: `<p>Hi ${escapeHtml(name)},</p><p>Reminder: your session is in <strong>${hours} hours</strong> (${escapeHtml(date)}).</p>`,
   }),
-  consentReminder: (name: string, link: string) => ({
-    subject: "Please sign your consent form",
-    text: `Hi ${name},\n\nPlease sign your consent form before your session: ${link}`,
-    html: `<p>Hi ${name},</p><p>Please sign your consent form before your session: <a href="${link}">${link}</a></p>`,
-  }),
+  consentReminder: (name: string, link: string) => {
+    const safeName = escapeHtml(name);
+    const safeLink = escapeHtml(link);
+    return {
+      subject: "Please sign your consent form",
+      text: `Hi ${name},\n\nPlease sign your consent form before your session: ${link}`,
+      html: `<p>Hi ${safeName},</p><p>Please sign your consent form before your session: <a href="${safeLink}">${safeLink}</a></p>`,
+    };
+  },
   aftercare: (name: string) => ({
     subject: "Your aftercare instructions",
     text: `Hi ${name},\n\nThanks for your session today. Please follow the aftercare instructions attached.\n\nBest regards,\nThe Studio`,
-    html: `<p>Hi ${name},</p><p>Thanks for your session today. Please follow the aftercare instructions attached.</p><p>Best regards,<br/>The Studio</p>`,
+    html: `<p>Hi ${escapeHtml(name)},</p><p>Thanks for your session today. Please follow the aftercare instructions attached.</p><p>Best regards,<br/>The Studio</p>`,
   }),
   decline: (name: string, reason?: string) => ({
     subject: "Update on your enquiry",
     text: `Hi ${name},\n\nThanks for your interest. After reviewing your enquiry, we're not able to take this on at the moment.${reason ? ` Reason: ${reason}` : ""}\n\nWe wish you the best.\nThe Studio`,
-    html: `<p>Hi ${name},</p><p>Thanks for your interest. After reviewing your enquiry, we're not able to take this on at the moment.${reason ? ` Reason: ${reason}` : ""}</p><p>We wish you the best.<br/>The Studio</p>`,
+    html: `<p>Hi ${escapeHtml(name)},</p><p>Thanks for your interest. After reviewing your enquiry, we're not able to take this on at the moment.${reason ? ` Reason: ${escapeHtml(reason)}` : ""}</p><p>We wish you the best.<br/>The Studio</p>`,
   }),
   balanceReminder: (
     name: string,
@@ -154,15 +175,22 @@ export const EMAIL_TEMPLATES = {
       currency,
       maximumFractionDigits: 0,
     }).format(amount / 100);
+    const safeName = escapeHtml(name);
+    const safeFormatted = escapeHtml(formatted);
+    const safeUrl = escapeHtml(linkUrl);
     return {
       subject: "Reminder: balance payment due",
       text: `Hi ${name},\n\nYour balance of ${formatted} is still due. Pay here: ${linkUrl}`,
-      html: `<p>Hi ${name},</p><p>Your balance of <strong>${formatted}</strong> is still due. Pay here: <a href="${linkUrl}">${linkUrl}</a></p>`,
+      html: `<p>Hi ${safeName},</p><p>Your balance of <strong>${safeFormatted}</strong> is still due. Pay here: <a href="${safeUrl}">${safeUrl}</a></p>`,
     };
   },
-  healedPhotoRequest: (name: string, feedbackUrl: string) => ({
-    subject: "Share your healed photos + feedback",
-    text: `Hi ${name},\n\nYour session should be healed by now. Please share your healed photos and let us know how it went: ${feedbackUrl}`,
-    html: `<p>Hi ${name},</p><p>Your session should be healed by now. Please share your healed photos and let us know how it went: <a href="${feedbackUrl}">${feedbackUrl}</a></p>`,
-  }),
+  healedPhotoRequest: (name: string, feedbackUrl: string) => {
+    const safeName = escapeHtml(name);
+    const safeUrl = escapeHtml(feedbackUrl);
+    return {
+      subject: "Share your healed photos + feedback",
+      text: `Hi ${name},\n\nYour session should be healed by now. Please share your healed photos and let us know how it went: ${feedbackUrl}`,
+      html: `<p>Hi ${safeName},</p><p>Your session should be healed by now. Please share your healed photos and let us know how it went: <a href="${safeUrl}">${safeUrl}</a></p>`,
+    };
+  },
 };

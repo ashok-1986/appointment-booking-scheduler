@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { bookings } from "@/lib/schema";
-import { eq, and, lte, isNull, ne } from "drizzle-orm";
+import { eq, and, lte, isNull, inArray } from "drizzle-orm";
 import { sendHealedPhotoFollowUp } from "@/lib/workflows";
 
 const CRON_SECRET = process.env.CRON_SECRET;
@@ -29,7 +29,12 @@ export async function GET(req: NextRequest) {
     .from(bookings)
     .where(
       and(
-        eq(bookings.stage, "paid_in_full"),
+        inArray(bookings.stage, [
+          "session_complete",
+          "session_completed",
+          "closed_followup",
+          "paid_in_full",
+        ]),
         isNull(bookings.followUpSentAt),
         lte(bookings.completedAt!, cutoff)
       )
