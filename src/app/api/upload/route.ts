@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 import { randomUUID } from "crypto";
+import { uploadToStorage } from "@/lib/services/storage";
 
 export const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number];
@@ -60,9 +59,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "No files uploaded" }, { status: 400 });
     }
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadDir, { recursive: true });
-
     const uploadedUrls: string[] = [];
 
     for (const file of files) {
@@ -104,10 +100,13 @@ export async function POST(req: NextRequest) {
 
       // Strictly enforce canonical file extension derived from validated magic bytes
       const filename = `${Date.now()}-${randomUUID().slice(0, 8)}${detected.ext}`;
-      const filePath = path.join(uploadDir, filename);
+      const uploadResult = await uploadToStorage({
+        buffer,
+        filename,
+        mimeType: detected.mime,
+      });
 
-      await writeFile(filePath, buffer);
-      uploadedUrls.push(`/uploads/${filename}`);
+      uploadedUrls.push(uploadResult.url);
     }
 
     return NextResponse.json({ ok: true, urls: uploadedUrls });
