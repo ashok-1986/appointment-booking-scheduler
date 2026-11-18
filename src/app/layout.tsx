@@ -38,9 +38,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="w-full overflow-x-hidden">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${cormorant.variable} ${montserrat.variable} antialiased font-body`}
+        className={`${geistSans.variable} ${geistMono.variable} ${cormorant.variable} ${montserrat.variable} antialiased font-body w-full min-h-screen overflow-x-hidden m-0 p-0`}
       >
         <TooltipProvider>
           <Providers>

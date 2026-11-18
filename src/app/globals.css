@@ -223,15 +223,28 @@
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50 font-body;
+  html {
+    @apply w-full overflow-x-hidden;
+    max-width: 100vw;
   }
   body {
-    @apply bg-background text-foreground font-body antialiased;
+    @apply bg-background text-foreground font-body antialiased w-full overflow-x-hidden m-0 p-0;
+    max-width: 100vw;
+  }
+  * {
+    @apply border-border outline-ring/50 font-body;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-heading tracking-tight;
   }
+}
+
+/* Full-Bleed Layout Inner Container */
+.full-bleed-container {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 2.5rem);
 }
 
 /* Hide Next.js error overlay portal */

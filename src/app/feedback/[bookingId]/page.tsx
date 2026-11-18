@@ -170,8 +170,9 @@ export default function HealedFeedbackPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50/80 px-4 py-10 sm:py-16 sm:px-6 dark:bg-zinc-950 font-montserrat">
-      <div className="mx-auto max-w-xl space-y-8">
+    <div className="min-h-screen w-full bg-zinc-50/80 dark:bg-zinc-950 font-montserrat py-10 sm:py-16 overflow-x-hidden m-0 p-0">
+      <div className="full-bleed-container">
+        <div className="mx-auto max-w-xl space-y-8">
         {/* Studio Branding */}
         <div className="text-center space-y-2">
           <Badge
@@ -421,6 +422,7 @@ export default function HealedFeedbackPage() {
             </Button>
           </form>
         )}
+        </div>
       </div>
     </div>
   );

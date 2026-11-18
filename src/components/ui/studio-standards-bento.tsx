@@ -713,8 +713,8 @@ export default function StudioStandardsBento({ onBookClick, className = "" }: St
         }
       `}</style>
 
-      <section className={cx("w-full bg-[#12131a] px-4 py-12 text-zinc-200 sm:px-6 sm:py-16 rounded-3xl border border-white/10 shadow-2xl", className)}>
-        <div className="mx-auto max-w-6xl">
+      <section className={cx("w-full bg-[#0d0e14] py-16 sm:py-24 text-zinc-200 border-y border-white/10 relative overflow-hidden", className)}>
+        <div className="full-bleed-container">
           {/* Header */}
           <div className="mb-10 flex flex-col md:flex-row md:items-end md:justify-between gap-6 border-b border-white/10 pb-8">
             <div className="max-w-2xl">

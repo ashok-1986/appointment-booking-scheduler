@@ -763,8 +763,9 @@ export default function ConsentPage() {
   // MAIN STUDIO IPAD DIGITAL CONSENT WORKFLOW FORM
   // =========================================================================
   return (
-    <div className="min-h-screen bg-zinc-50/80 px-4 py-8 sm:py-14 sm:px-6 dark:bg-zinc-950 font-montserrat">
-      <div className="mx-auto max-w-2xl space-y-8">
+    <div className="min-h-screen w-full bg-zinc-50/80 dark:bg-zinc-950 font-montserrat py-8 sm:py-14 overflow-x-hidden m-0 p-0">
+      <div className="full-bleed-container">
+        <div className="mx-auto max-w-2xl space-y-8">
         {/* Studio Branding & Header */}
         <div className="text-center space-y-2">
           <Badge
@@ -1416,6 +1417,7 @@ export default function ConsentPage() {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }
