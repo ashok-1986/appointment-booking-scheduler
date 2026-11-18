@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { logInboundMessage } from "@/lib/workflows";
 import { db } from "@/lib/db";
 import { bookings, clients, messages } from "@/lib/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { verifyWhatsAppWebhookSignature } from "@/lib/services/whatsapp";
+import { normalizePhoneNumber, selectActiveBooking } from "@/lib/services/phone-normalizer";
 
 function getVerifyToken(): string | null {
   const token =
@@ -66,18 +67,25 @@ export async function POST(req: NextRequest) {
     if (message) {
       const from = message.from;
       const text = message.text?.body ?? "";
-      // Find booking by client phone
-      const client = await db.query.clients.findFirst({
-        where: eq(clients.phone, from),
+
+      const { queryVariants } = normalizePhoneNumber(from);
+
+      // Match client across phone number variants
+      const allClients = await db.query.clients.findMany({
+        where: inArray(clients.phone, queryVariants),
       });
+      const client = allClients[0];
+
       if (client) {
-        // Select the active or most recent booking for this client
-        const booking = await db.query.bookings.findFirst({
+        // Query client bookings ordered by newest first
+        const clientBookings = await db.query.bookings.findMany({
           where: eq(bookings.clientId, client.id),
           orderBy: [desc(bookings.createdAt)],
         });
-        if (booking) {
-          await logInboundMessage(booking.id, text, from);
+
+        const activeBooking = selectActiveBooking(clientBookings);
+        if (activeBooking) {
+          await logInboundMessage(activeBooking.id, text, from);
         }
       }
     }
