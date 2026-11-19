@@ -442,7 +442,7 @@ export default function GalleryPage() {
 
       {/* Gallery Photo Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5">
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
@@ -487,7 +487,7 @@ export default function GalleryPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-5">
           {filteredAssets.map((asset, index) => {
             const meta = CATEGORY_META[asset.category] || CATEGORY_META.fresh;
             const uploadDate = new Date(asset.createdAt).toLocaleDateString("en-IN", {

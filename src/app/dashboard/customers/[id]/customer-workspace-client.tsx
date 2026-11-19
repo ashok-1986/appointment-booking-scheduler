@@ -276,8 +276,8 @@ export default function CustomerWorkspaceClient({
   return (
     <div className="min-h-screen bg-background text-foreground font-body pb-12">
       {/* Top Studio Breadcrumb & Context Header */}
-      <div className="border-b border-border/70 bg-card/60 px-4 py-3 sm:px-6 backdrop-blur-md sticky top-0 z-20">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
+      <div className="border-b border-border/70 bg-card/60 px-4 py-3 sm:px-6 lg:px-8 xl:px-10 backdrop-blur-md sticky top-0 z-20">
+        <div className="flex w-full items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
               href="/dashboard/bookings"
@@ -315,7 +315,7 @@ export default function CustomerWorkspaceClient({
       </div>
 
       {/* Main 3-Column Responsive Grid */}
-      <main className="mx-auto max-w-7xl px-4 pt-5 sm:px-6">
+      <main className="w-full px-4 pt-5 sm:px-6 lg:px-8 xl:px-10">
         <div className="grid grid-cols-12 gap-6 items-start">
           {/* ======================================================== */}
           {/* LEFT COLUMN: Identity, Quick Actions, Props, Notes (25%) */}
