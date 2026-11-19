@@ -91,14 +91,14 @@ type Props = {
     }>;
     consentRecords: Array<{
       id: string;
-      legalName: string;
-      dateOfBirth: string;
-      procedureConsent: boolean;
-      photographyConsent: boolean;
-      marketingConsent: boolean;
-      signatureImageUrl: string;
+      legalName: string | null;
+      dateOfBirth: string | null;
+      procedureConsent: boolean | null;
+      photographyConsent: boolean | null;
+      marketingConsent: boolean | null;
+      signatureImageUrl: string | null;
       pdfUrl: string | null;
-      signedAt: string;
+      signedAt: string | null;
     }>;
   };
 };
@@ -452,13 +452,15 @@ export default function CustomerDossierClient({ initialProfile }: Props) {
                       <span className="font-semibold text-sm text-foreground">
                         Digital Tattoo Consent Form
                       </span>
-                      <Badge className="bg-emerald-500/10 text-emerald-700 border-emerald-300 text-[10px]">
-                        Legally Executed
+                      <Badge className={c.signedAt ? "bg-emerald-500/10 text-emerald-700 border-emerald-300 text-[10px]" : "bg-amber-500/10 text-amber-700 border-amber-300 text-[10px]"}>
+                        {c.signedAt ? "Legally Executed" : "Pending Signature"}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Signer: <span className="font-medium text-foreground">{c.legalName}</span> (DOB: {c.dateOfBirth}) · Signed{" "}
-                      {format(new Date(c.signedAt), "d MMM yyyy, h:mm a")} IST
+                      Signer: <span className="font-medium text-foreground">{c.legalName || "Client"}</span> (DOB: {c.dateOfBirth || "N/A"}) ·{" "}
+                      {c.signedAt
+                        ? `Signed ${format(new Date(c.signedAt), "d MMM yyyy, h:mm a")} IST`
+                        : "Pending Signature"}
                     </p>
                     <div className="flex flex-wrap gap-2 text-[11px] text-zinc-500 pt-1">
                       <span>Procedure: {c.procedureConsent ? "✓ Confirmed" : "✗"}</span>

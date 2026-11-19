@@ -15,7 +15,9 @@ export function DigitalConsentCard({
   onOpenPaperOverrideModal: () => void;
 }) {
   const latestConsent = consentRecords[0] || null;
-  const isSigned = latestConsent != null;
+  const isSigned =
+    latestConsent != null &&
+    (latestConsent.status === "signed" || Boolean(latestConsent.signedAt));
   const idProofType =
     latestConsent?.healthDisclosures?.idProofType || latestConsent?.idProofType;
 

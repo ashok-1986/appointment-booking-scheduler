@@ -268,7 +268,9 @@ export default function CustomerWorkspaceClient({
     return activeRecords.length > 0 ? activeRecords : initialData.consentRecords || [];
   }, [activeBooking, initialData.consentRecords]);
 
-  const hasSignedConsent = currentConsentRecords.length > 0;
+  const hasSignedConsent = currentConsentRecords.some(
+    (c: any) => c.status === "signed" || Boolean(c.signedAt)
+  );
   const isRepeatCollector = (initialData.bookings?.length || 0) > 1;
 
   return (
